@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat App - Вход</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <style>
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        .tab-button.active {
+            border-bottom: 2px solid #667eea !important;
+            color: #667eea !important;
+            font-weight: bold !important;
+        }
+        .loading {
+            opacity: 0.7;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+<div class="auth-container">
+    <div class="auth-form">
+        <h1>Chat Application</h1>
+
+        <div class="tabs">
+            <button class="tab-button active" data-tab="login">Вход</button>
+            <button class="tab-button" data-tab="register">Регистрация</button>
+        </div>
+
+        <!-- Форма входа -->
+        <form id="loginForm" class="tab-content active">
+            <div class="form-group">
+                <label for="loginUsername">Имя пользователя:</label>
+                <input type="text" id="loginUsername" required>
+            </div>
+            <div class="form-group">
+                <label for="loginPassword">Пароль:</label>
+                <input type="password" id="loginPassword" required>
+            </div>
+            <button type="submit" class="btn-primary" id="loginBtn">Войти</button>
+            <div id="loginMessage" class="message"></div>
+        </form>
+
+        <!-- Форма регистрации -->
+        <form id="registerForm" class="tab-content">
+            <div class="form-group">
+                <label for="registerUsername">Имя пользователя:</label>
+                <input type="text" id="registerUsername" required minlength="3">
+            </div>
+            <div class="form-group">
+                <label for="registerPassword">Пароль:</label>
+                <input type="password" id="registerPassword" required minlength="3">
+            </div>
+            <div class="form-group">
+                <label for="confirmPassword">Подтвердите пароль:</label>
+                <input type="password" id="confirmPassword" required>
+            </div>
+            <button type="submit" class="btn-primary" id="registerBtn">Зарегистрироваться</button>
+            <div id="registerMessage" class="message"></div>
+        </form>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        console.log("=== ДЕБАГ: Страница загружена ===");
+
+        // Элементы для отладки
+        const loginBtn = document.getElementById('loginBtn');
+        const registerBtn = document.getElementById('registerBtn');
+
+        // Функция для переключения вкладок
+        function setupTabs() {
+            const tabButtons = document.querySelectorAll('.tab-button');
+            const tabContents = document.querySelectorAll('.tab-content');
+
+            tabButtons.forEach(button => {
+                button.addEventListener('click', function() {
+                    const tabName = this.getAttribute('data-tab');
+                    console.log("Переключение на вкладку:", tabName);
+
+                    // Обновляем кнопки
+                    tabButtons.forEach(btn => btn.classList.remove('active'));
+                    this.classList.add('active');
+
+                    // Обновляем формы
+                    tabContents.forEach(content => content.classList.remove('active'));
+                    document.getElementById(tabName + 'Form').classList.add('active');
+                });
+            });
+        }
+
+        // Функция для показа сообщений
+        function showMessage(elementId, message, type) {
+            const element = document.getElementById(elementId);
+            element.textContent = message;
+            element.className = `message ${type}`;
+            console.log("Сообщение:", message, "Тип:", type);
+        }
+
+        // Функция для показа состояния загрузки
+        function setLoading(button, isLoading) {
+            if (isLoading) {
+                button.classList.add('loading');
+                button.textContent = 'Загрузка...';
+                button.disabled = true;
+            } else {
+                button.classList.remove('loading');
+                button.textContent = button.id === 'loginBtn' ? 'Войти' : 'Зарегистрироваться';
+                button.disabled = false;
+            }
+        }
+
+        // Обработка формы входа
+        document.getElementById('loginForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            console.log("=== НАЧАЛО ВХОДА ===");
+
+            const username = document.getElementById('loginUsername').value;
+            const password = document.getElementById('loginPassword').value;
+            const loginBtn = document.getElementById('loginBtn');
+
+            console.log("Введенные данные:", { username, password });
+
+            if (!username || !password) {
+                showMessage('loginMessage', 'Заполните все поля', 'error');
+                return;
+            }
+
+            setLoading(loginBtn, true);
+
+            try {
+                console.log("Отправка запроса на /api/login...");
+
+                const response = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: `username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`
+                });
+
+                console.log("Ответ получен, статус:", response.status);
+
+                const data = await response.json();
+                console.log("Данные ответа:", data);
+
+                if (data.success) {
+                    showMessage('loginMessage', 'Успешный вход! Перенаправление...', 'success');
+                    console.log("Роль пользователя:", data.role);
+
+                    if (data.role === 'ADMIN') {
+                        setTimeout(() => window.location.href = '/admin', 1000);
+                    } else {
+                        setTimeout(() => window.location.href = '/chat', 1000);
+                    }
+                } else {
+                    showMessage('loginMessage', data.message || 'Ошибка входа', 'error');
+                }
+            } catch (error) {
+                console.error('Ошибка входа:', error);
+                showMessage('loginMessage', 'Ошибка соединения с сервером', 'error');
+            } finally {
+                setLoading(loginBtn, false);
+            }
+        });
+
+        // Обработка формы регистрации
+        document.getElementById('registerForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            console.log("=== НАЧАЛО РЕГИСТРАЦИИ ===");
+
+            const username = document.getElementById('registerUsername').value;
+            const password = document.getElementById('registerPassword').value;
+            const confirmPassword = document.getElementById('confirmPassword').value;
+            const registerBtn = document.getElementById('registerBtn');
+
+            console.log("Введенные данные:", { username, password, confirmPassword });
+
+            if (password !== confirmPassword) {
+                showMessage('registerMessage', 'Пароли не совпадают', 'error');
+                return;
+            }
+
+            if (password.length < 3) {
+                showMessage('registerMessage', 'Пароль должен содержать минимум 3 символа', 'error');
+                return;
+            }
+
+            setLoading(registerBtn, true);
+
+            try {
+                console.log("Отправка запроса на /api/register...");
+
+                const response = await fetch('/api/register', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: `username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`
+                });
+
+                console.log("Ответ получен, статус:", response.status);
+
+                const data = await response.json();
+                console.log("Данные ответа:", data);
+
+                if (data.success) {
+                    showMessage('registerMessage', 'Регистрация успешна! Теперь войдите в систему.', 'success');
+                    // Переключаемся на вкладку входа
+                    document.querySelector('[data-tab="login"]').click();
+                    document.getElementById('loginUsername').value = username;
+                    document.getElementById('loginPassword').value = '';
+                } else {
+                    showMessage('registerMessage', data.message || 'Ошибка регистрации', 'error');
+                }
+            } catch (error) {
+                console.error('Ошибка регистрации:', error);
+                showMessage('registerMessage', 'Ошибка соединения с сервером', 'error');
+            } finally {
+                setLoading(registerBtn, false);
+            }
+        });
+
+        // Инициализация
+        setupTabs();
+        console.log("=== ИНИЦИАЛИЗАЦИЯ ЗАВЕРШЕНА ===");
+    });
+</script>
+</body>
+</html>

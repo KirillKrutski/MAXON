@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Admin Panel</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<div class="admin-container">
+    <div class="admin-header">
+        <h1>Панель администратора</h1>
+        <div class="admin-actions">
+            <span th:text="${username}">Администратор</span>
+            <span class="admin-badge" th:text="${role}">ADMIN</span>
+            <button onclick="logout()" class="btn-secondary">Выйти</button>
+        </div>
+    </div>
+
+    <div class="admin-content">
+        <div class="reports-section">
+            <h2>Жалобы на сообщения</h2>
+            <div class="reports-list">
+                <div class="no-data">Жалоб нет</div>
+            </div>
+        </div>
+
+        <div class="users-section">
+            <h2>Управление пользователями</h2>
+            <div class="users-list">
+                <div class="no-data">Пользователи появятся здесь</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    function logout() {
+        console.log("Выход администратора...");
+        fetch('/api/logout', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            }
+        })
+            .then(response => {
+                console.log("Ответ на выход:", response.status);
+                window.location.href = '/';
+            })
+            .catch(error => {
+                console.error('Ошибка выхода:', error);
+                window.location.href = '/';
+            });
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        console.log("Admin page loaded");
+    });
+</script>
+</body>
+</html>
