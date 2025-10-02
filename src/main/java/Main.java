@@ -13,7 +13,6 @@ import java.util.Map;
 
 public class Main {
     public static void main(String[] args) {
-        // ✅ Правильная настройка ObjectMapper для работы с Java 8 Date/Time
         ObjectMapper objectMapper = createObjectMapper();
 
         Javalin app = Javalin.create(config -> {
@@ -27,7 +26,7 @@ public class Main {
             // Thymeleaf для HTML из templates
             config.fileRenderer(new JavalinThymeleaf(createTemplateEngine()));
 
-            // ✅ Правильная настройка JSON mapper
+            //настройка JSON mapper
             config.jsonMapper(new JavalinJackson(objectMapper, true));
         });
 
@@ -83,9 +82,7 @@ public class Main {
 
     private static ObjectMapper createObjectMapper() {
         ObjectMapper objectMapper = new ObjectMapper();
-        // ✅ Регистрируем модуль для Java 8 Date/Time
         objectMapper.registerModule(new JavaTimeModule());
-        // ✅ Отключаем запись дат как timestamp (будет читаемый формат)
         objectMapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
         return objectMapper;
     }

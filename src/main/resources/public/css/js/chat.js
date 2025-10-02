@@ -412,7 +412,6 @@ class ChatManager {
     }
 }
 
-// Initialize chat manager when page loads
 document.addEventListener('DOMContentLoaded', () => {
     window.chatManager = new ChatManager();
 });
