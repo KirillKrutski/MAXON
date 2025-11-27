@@ -53,6 +53,7 @@ public class DatabaseService {
         try (Connection conn = getConnection();
              PreparedStatement checkStmt = conn.prepareStatement(checkSql);
              PreparedStatement insertStmt = conn.prepareStatement(insertSql)) {
+            String hashedPassword = bcryptHasher.hashToString(12, password.toCharArray());
 
             // Проверяем существование пользователя или email
             checkStmt.setString(1, username);
@@ -65,7 +66,7 @@ public class DatabaseService {
 
             // Регистрируем нового пользователя
             insertStmt.setString(1, username);
-            insertStmt.setString(2, password); // В реальном приложении используйте хеширование!
+            insertStmt.setString(2, hashedPassword);
             insertStmt.setString(3, email);
 
             int affectedRows = insertStmt.executeUpdate();
