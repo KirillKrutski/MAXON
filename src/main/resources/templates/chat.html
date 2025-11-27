@@ -14,7 +14,10 @@
             <h2>💬 Чаты</h2>
             <div class="user-info">
                 <span th:text="${username}">Пользователь</span>
-                <button onclick="logout()" class="btn-secondary">🚪 Выйти</button>
+                <div class="user-actions">
+                    <button onclick="showChangePasswordModal()" class="btn-secondary" title="Сменить пароль">🔑</button>
+                    <button onclick="logout()" class="btn-secondary">🚪 Выйти</button>
+                </div>
             </div>
         </div>
 
@@ -67,6 +70,35 @@
     </div>
 </div>
 
+<!-- Модальное окно смены пароля -->
+<div id="changePasswordModal" class="modal hidden">
+    <div class="modal-content">
+        <h3>🔑 Смена пароля</h3>
+
+        <div class="form-group">
+            <label for="currentPassword">Текущий пароль:</label>
+            <input type="password" id="currentPassword" placeholder="Введите текущий пароль">
+        </div>
+
+        <div class="form-group">
+            <label for="newPassword">Новый пароль:</label>
+            <input type="password" id="newPassword" placeholder="Введите новый пароль" minlength="3">
+        </div>
+
+        <div class="form-group">
+            <label for="confirmNewPassword">Подтвердите новый пароль:</label>
+            <input type="password" id="confirmNewPassword" placeholder="Повторите новый пароль">
+        </div>
+
+        <div class="modal-actions">
+            <button type="button" class="btn-secondary" onclick="hideChangePasswordModal()">Отмена</button>
+            <button type="button" class="btn-primary" onclick="changePassword()">Сменить пароль</button>
+        </div>
+
+        <div id="changePasswordMessage" class="message"></div>
+    </div>
+</div>
+
 <script>
     let currentUser = null;
     let currentChat = null;
@@ -94,6 +126,90 @@
             console.error('❌ Ошибка загрузки пользователя:', error);
             window.location.href = '/';
         }
+    }
+
+    // ==================== СМЕНА ПАРОЛЯ ====================
+    // Показать модальное окно смены пароля
+    function showChangePasswordModal() {
+        document.getElementById('changePasswordModal').classList.remove('hidden');
+        // Очищаем поля и сообщения
+        document.getElementById('currentPassword').value = '';
+        document.getElementById('newPassword').value = '';
+        document.getElementById('confirmNewPassword').value = '';
+        document.getElementById('changePasswordMessage').textContent = '';
+    }
+
+    // Скрыть модальное окно смены пароля
+    function hideChangePasswordModal() {
+        document.getElementById('changePasswordModal').classList.add('hidden');
+    }
+
+    // Смена пароля
+    async function changePassword() {
+        const currentPassword = document.getElementById('currentPassword').value;
+        const newPassword = document.getElementById('newPassword').value;
+        const confirmNewPassword = document.getElementById('confirmNewPassword').value;
+        const messageElement = document.getElementById('changePasswordMessage');
+        const changeBtn = document.querySelector('#changePasswordModal .btn-primary');
+
+        // Валидация
+        if (!currentPassword || !newPassword || !confirmNewPassword) {
+            showChangePasswordMessage('Заполните все поля', 'error');
+            return;
+        }
+
+        if (newPassword.length < 3) {
+            showChangePasswordMessage('Новый пароль должен содержать минимум 3 символа', 'error');
+            return;
+        }
+
+        if (newPassword !== confirmNewPassword) {
+            showChangePasswordMessage('Новые пароли не совпадают', 'error');
+            return;
+        }
+
+        // Показываем загрузку
+        changeBtn.textContent = 'Смена...';
+        changeBtn.disabled = true;
+
+        try {
+            console.log("🔄 Смена пароля...");
+
+            const response = await fetch('/api/change-password', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: `currentPassword=${encodeURIComponent(currentPassword)}&newPassword=${encodeURIComponent(newPassword)}`
+            });
+
+            const data = await response.json();
+            console.log("📨 Ответ смены пароля:", data);
+
+            if (data.success) {
+                showChangePasswordMessage('Пароль успешно изменен!', 'success');
+                // Закрываем окно через 2 секунды
+                setTimeout(() => {
+                    hideChangePasswordModal();
+                }, 2000);
+            } else {
+                showChangePasswordMessage(data.message || 'Ошибка смены пароля', 'error');
+            }
+        } catch (error) {
+            console.error('💥 Ошибка смены пароля:', error);
+            showChangePasswordMessage('Ошибка соединения с сервером', 'error');
+        } finally {
+            // Восстанавливаем кнопку
+            changeBtn.textContent = 'Сменить пароль';
+            changeBtn.disabled = false;
+        }
+    }
+
+    // Показать сообщение в модальном окне
+    function showChangePasswordMessage(message, type) {
+        const element = document.getElementById('changePasswordMessage');
+        element.textContent = message;
+        element.className = `message ${type}`;
     }
 
     // ==================== ПОИСК ПОЛЬЗОВАТЕЛЕЙ ====================
@@ -422,6 +538,25 @@
             window.location.href = '/';
         }
     }
+
+    // Закрытие модального окна при клике вне его
+    document.addEventListener('click', function(e) {
+        if (e.target.id === 'changePasswordModal') {
+            hideChangePasswordModal();
+        }
+    });
+
+    // Обработчик нажатия Enter в полях пароля
+    document.addEventListener('DOMContentLoaded', function() {
+        const passwordInputs = document.querySelectorAll('#changePasswordModal input[type="password"]');
+        passwordInputs.forEach(input => {
+            input.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    changePassword();
+                }
+            });
+        });
+    });
 
     // Автообновление данных каждые 10 секунд
     setInterval(() => {

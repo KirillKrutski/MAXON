@@ -21,6 +21,24 @@
             opacity: 0.7;
             pointer-events: none;
         }
+        .forgot-password {
+            text-align: center;
+            margin-top: 1rem;
+        }
+        .forgot-password a {
+            color: #667eea;
+            text-decoration: none;
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+        .forgot-password a:hover {
+            text-decoration: underline;
+        }
+        .email-note {
+            font-size: 0.8rem;
+            color: #666;
+            margin-top: 0.25rem;
+        }
     </style>
 </head>
 <body>
@@ -44,6 +62,11 @@
                 <input type="password" id="loginPassword" required>
             </div>
             <button type="submit" class="btn-primary" id="loginBtn">Войти</button>
+
+            <div class="forgot-password">
+                <a onclick="showForgotPasswordModal()">Забыли пароль?</a>
+            </div>
+
             <div id="loginMessage" class="message"></div>
         </form>
 
@@ -52,6 +75,11 @@
             <div class="form-group">
                 <label for="registerUsername">Имя пользователя:</label>
                 <input type="text" id="registerUsername" required minlength="3">
+            </div>
+            <div class="form-group">
+                <label for="registerEmail">Email:</label>
+                <input type="email" id="registerEmail" required>
+                <div class="email-note">Для восстановления пароля в случае утери</div>
             </div>
             <div class="form-group">
                 <label for="registerPassword">Пароль:</label>
@@ -67,13 +95,29 @@
     </div>
 </div>
 
+<!-- Модальное окно восстановления пароля -->
+<div id="forgotPasswordModal" class="modal hidden">
+    <div class="modal-content">
+        <h3>Восстановление пароля</h3>
+        <p>Введите ваше имя пользователя для восстановления пароля:</p>
+
+        <div class="form-group">
+            <label for="recoveryUsername">Имя пользователя:</label>
+            <input type="text" id="recoveryUsername" placeholder="Введите ваше имя пользователя">
+        </div>
+
+        <div class="modal-actions">
+            <button type="button" class="btn-secondary" onclick="hideForgotPasswordModal()">Отмена</button>
+            <button type="button" class="btn-primary" onclick="recoverPassword()">Восстановить</button>
+        </div>
+
+        <div id="recoveryMessage" class="message"></div>
+    </div>
+</div>
+
 <script>
     document.addEventListener('DOMContentLoaded', function() {
         console.log("=== ДЕБАГ: Страница загружена ===");
-
-        // Элементы для отладки
-        const loginBtn = document.getElementById('loginBtn');
-        const registerBtn = document.getElementById('registerBtn');
 
         // Функция для переключения вкладок
         function setupTabs() {
@@ -114,6 +158,72 @@
                 button.classList.remove('loading');
                 button.textContent = button.id === 'loginBtn' ? 'Войти' : 'Зарегистрироваться';
                 button.disabled = false;
+            }
+        }
+
+        // Валидация email
+        function isValidEmail(email) {
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            return emailRegex.test(email);
+        }
+
+        // Показать модальное окно восстановления пароля
+        window.showForgotPasswordModal = function() {
+            document.getElementById('forgotPasswordModal').classList.remove('hidden');
+            document.getElementById('recoveryUsername').value = '';
+            document.getElementById('recoveryMessage').textContent = '';
+        }
+
+        // Скрыть модальное окно восстановления пароля
+        window.hideForgotPasswordModal = function() {
+            document.getElementById('forgotPasswordModal').classList.add('hidden');
+        }
+
+        // Восстановление пароля
+        window.recoverPassword = async function() {
+            const username = document.getElementById('recoveryUsername').value.trim();
+            const recoverBtn = document.querySelector('#forgotPasswordModal .btn-primary');
+            const messageElement = document.getElementById('recoveryMessage');
+
+            if (!username) {
+                showMessage('recoveryMessage', 'Введите имя пользователя', 'error');
+                return;
+            }
+
+            // Показываем загрузку
+            recoverBtn.textContent = 'Отправка...';
+            recoverBtn.disabled = true;
+
+            try {
+                console.log("Отправка запроса восстановления пароля для:", username);
+
+                const response = await fetch('/api/forgot-password', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: `username=${encodeURIComponent(username)}`
+                });
+
+                const data = await response.json();
+                console.log("Ответ восстановления пароля:", data);
+
+                if (data.success) {
+                    showMessage('recoveryMessage', data.message, 'success');
+                    // Автоматически закрываем окно через 3 секунды
+                    setTimeout(() => {
+                        hideForgotPasswordModal();
+                    }, 3000);
+                } else {
+                    showMessage('recoveryMessage', data.message, 'error');
+                }
+            } catch (error) {
+                console.error('Ошибка восстановления пароля:', error);
+                showMessage('recoveryMessage', 'Ошибка соединения с сервером', 'error');
+            } finally {
+                // Восстанавливаем кнопку
+                recoverBtn.textContent = 'Восстановить';
+                recoverBtn.disabled = false;
             }
         }
 
@@ -177,11 +287,18 @@
             console.log("=== НАЧАЛО РЕГИСТРАЦИИ ===");
 
             const username = document.getElementById('registerUsername').value;
+            const email = document.getElementById('registerEmail').value;
             const password = document.getElementById('registerPassword').value;
             const confirmPassword = document.getElementById('confirmPassword').value;
             const registerBtn = document.getElementById('registerBtn');
 
-            console.log("Введенные данные:", { username, password, confirmPassword });
+            console.log("Введенные данные:", { username, email, password, confirmPassword });
+
+            // Валидация
+            if (!username || !email || !password || !confirmPassword) {
+                showMessage('registerMessage', 'Заполните все поля', 'error');
+                return;
+            }
 
             if (password !== confirmPassword) {
                 showMessage('registerMessage', 'Пароли не совпадают', 'error');
@@ -190,6 +307,11 @@
 
             if (password.length < 3) {
                 showMessage('registerMessage', 'Пароль должен содержать минимум 3 символа', 'error');
+                return;
+            }
+
+            if (!isValidEmail(email)) {
+                showMessage('registerMessage', 'Введите корректный email адрес', 'error');
                 return;
             }
 
@@ -203,7 +325,7 @@
                     headers: {
                         'Content-Type': 'application/x-www-form-urlencoded',
                     },
-                    body: `username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`
+                    body: `username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}&email=${encodeURIComponent(email)}`
                 });
 
                 console.log("Ответ получен, статус:", response.status);
@@ -217,6 +339,10 @@
                     document.querySelector('[data-tab="login"]').click();
                     document.getElementById('loginUsername').value = username;
                     document.getElementById('loginPassword').value = '';
+                    // Очищаем форму регистрации
+                    document.getElementById('registerEmail').value = '';
+                    document.getElementById('registerPassword').value = '';
+                    document.getElementById('confirmPassword').value = '';
                 } else {
                     showMessage('registerMessage', data.message || 'Ошибка регистрации', 'error');
                 }
@@ -225,6 +351,13 @@
                 showMessage('registerMessage', 'Ошибка соединения с сервером', 'error');
             } finally {
                 setLoading(registerBtn, false);
+            }
+        });
+
+        // Закрытие модального окна при клике вне его
+        document.addEventListener('click', function(e) {
+            if (e.target.id === 'forgotPasswordModal') {
+                hideForgotPasswordModal();
             }
         });
 

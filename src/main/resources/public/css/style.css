@@ -716,3 +716,31 @@ body {
     font-style: italic;
     padding: 2rem;
 }
+/* Добавьте в конец файла */
+.user-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+}
+
+.user-actions .btn-secondary {
+    padding: 0.4rem 0.8rem;
+    font-size: 0.9rem;
+}
+
+.password-strength {
+    margin-top: 0.25rem;
+    font-size: 0.8rem;
+}
+
+.password-strength.weak {
+    color: #dc3545;
+}
+
+.password-strength.medium {
+    color: #ffc107;
+}
+
+.password-strength.strong {
+    color: #28a745;
+}

@@ -13,6 +13,7 @@ import java.util.Map;
 
 public class Main {
     public static void main(String[] args) {
+        PasswordMigration.migratePasswords();
         ObjectMapper objectMapper = createObjectMapper();
 
         Javalin app = Javalin.create(config -> {

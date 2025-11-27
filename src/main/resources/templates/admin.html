@@ -12,6 +12,7 @@
         <div class="admin-actions">
             <span th:text="${username}">Администратор</span>
             <span class="admin-badge" th:text="${role}">ADMIN</span>
+            <button onclick="showChangePasswordModal()" class="btn-secondary" title="Сменить пароль">🔑</button>
             <button onclick="logout()" class="btn-secondary">Выйти</button>
         </div>
     </div>

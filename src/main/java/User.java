@@ -8,6 +8,7 @@ public class User {
     private boolean isBlocked;
     private LocalDateTime blockedUntil;
     private LocalDateTime createdAt;
+    private String email;
 
     // Конструкторы
     public User() {
@@ -16,17 +17,19 @@ public class User {
         this.createdAt = LocalDateTime.now();
     }
 
-    public User(String username, String password) {
+    public User(String username, String password, String email) {
         this();
         this.username = username;
         this.password = password;
+        this.email = email;
     }
 
-    public User(int id, String username, String password, String role, boolean isBlocked,
+    public User(int id, String username, String password, String email, String role, boolean isBlocked,
                 LocalDateTime blockedUntil, LocalDateTime createdAt) {
         this.id = id;
         this.username = username;
         this.password = password;
+        this.email = email;
         this.role = role != null ? role : "USER";
         this.isBlocked = isBlocked;
         this.blockedUntil = blockedUntil;
@@ -49,6 +52,14 @@ public class User {
     public void setUsername(String username) {
         this.username = username;
     }
+
+    public String getEmail() {
+        return email;
+    }
+    public void setEmail(String email) {
+        this.email = email;
+    }
+
 
     public String getPassword() {
         return password;
@@ -160,6 +171,7 @@ public class User {
         private String username;
         private String password;
         private String role = "USER";
+        private String email;
         private boolean isBlocked = false;
         private LocalDateTime blockedUntil;
         private LocalDateTime createdAt = LocalDateTime.now();
@@ -176,6 +188,11 @@ public class User {
 
         public Builder password(String password) {
             this.password = password;
+            return this;
+        }
+
+        public Builder email(String email) {
+            this.email = email;
             return this;
         }
 
@@ -200,7 +217,7 @@ public class User {
         }
 
         public User build() {
-            return new User(id, username, password, role, isBlocked, blockedUntil, createdAt);
+            return new User(id, username, password, email, role, isBlocked, blockedUntil, createdAt);
         }
     }
 
@@ -215,6 +232,7 @@ public class User {
                 this.id,
                 this.username,
                 null, // не копируем пароль
+                this.email,
                 this.role,
                 this.isBlocked,
                 this.blockedUntil,
@@ -226,8 +244,10 @@ public class User {
     public boolean isValid() {
         return username != null && !username.trim().isEmpty() &&
                 password != null && !password.trim().isEmpty() &&
+                email != null && !email.trim().isEmpty() &&
                 role != null && (role.equals("USER") || role.equals("ADMIN"));
     }
+
 
     // Проверка минимальных требований к паролю
     public boolean hasValidPassword() {

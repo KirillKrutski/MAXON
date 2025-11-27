@@ -33,9 +33,8 @@ public class DatabaseService {
             ResultSet rs = stmt.executeQuery();
             if (rs.next()) {
                 String storedHash = rs.getString("password");
-                // Проверяем пароль (если хешированный) или сравниваем напрямую для демо
-                if (bcryptVerifyer.verify(password.toCharArray(), storedHash.toCharArray()).verified ||
-                        password.equals(storedHash)) {
+                // ПРОВЕРЯЕМ ПАРОЛЬ С ИСПОЛЬЗОВАНИЕМ BCrypt
+                if (bcryptVerifyer.verify(password.toCharArray(), storedHash.toCharArray()).verified) {
                     return mapUser(rs);
                 }
             }
@@ -45,30 +44,32 @@ public class DatabaseService {
         return null;
     }
 
-    public static boolean registerUser(String username, String password) {
-        // Сначала проверяем, нет ли уже такого пользователя
-        String checkSql = "SELECT id FROM users WHERE username = ?";
-        String insertSql = "INSERT INTO users (username, password) VALUES (?, ?)";
+
+    public static boolean registerUser(String username, String password, String email) {
+        // Сначала проверяем, нет ли уже такого пользователя или email
+        String checkSql = "SELECT id FROM users WHERE username = ? OR email = ?";
+        String insertSql = "INSERT INTO users (username, password, email) VALUES (?, ?, ?)";
 
         try (Connection conn = getConnection();
              PreparedStatement checkStmt = conn.prepareStatement(checkSql);
              PreparedStatement insertStmt = conn.prepareStatement(insertSql)) {
 
-            // Проверяем существование пользователя
+            // Проверяем существование пользователя или email
             checkStmt.setString(1, username);
+            checkStmt.setString(2, email);
             ResultSet rs = checkStmt.executeQuery();
             if (rs.next()) {
-                System.out.println("❌ Пользователь " + username + " уже существует");
-                return false; // Пользователь уже существует
+                System.out.println("❌ Пользователь " + username + " или email " + email + " уже существует");
+                return false; // Пользователь или email уже существует
             }
 
             // Регистрируем нового пользователя
-            // Для простоты храним пароль в открытом виде (в реальном приложении используйте хеширование!)
             insertStmt.setString(1, username);
-            insertStmt.setString(2, password); // В реальном приложении: bcryptHasher.hashToString(12, password.toCharArray())
+            insertStmt.setString(2, password); // В реальном приложении используйте хеширование!
+            insertStmt.setString(3, email);
 
             int affectedRows = insertStmt.executeUpdate();
-            System.out.println("✅ Зарегистрирован новый пользователь: " + username);
+            System.out.println("✅ Зарегистрирован новый пользователь: " + username + " (" + email + ")");
             return affectedRows > 0;
 
         } catch (SQLException e) {
@@ -482,6 +483,7 @@ public class DatabaseService {
         User user = new User();
         user.setId(rs.getInt("id"));
         user.setUsername(rs.getString("username"));
+        user.setEmail(rs.getString("email")); // Добавьте эту строку
         user.setRole(rs.getString("role"));
         user.setBlocked(rs.getBoolean("is_blocked"));
 
@@ -704,4 +706,46 @@ public class DatabaseService {
         request.setCreatedAt(rs.getTimestamp("created_at").toLocalDateTime());
         return request;
     }
+
+    // Добавьте эти методы в класс DatabaseService
+
+    public static User getUserByUsername(String username) {
+        String sql = "SELECT * FROM users WHERE username = ?";
+        try (Connection conn = getConnection(); PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setString(1, username);
+            ResultSet rs = stmt.executeQuery();
+            if (rs.next()) {
+                return mapUser(rs);
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return null;
+    }
+
+    public static boolean updateUserPassword(int userId, String newPassword) {
+        String sql = "UPDATE users SET password = ? WHERE id = ?";
+        try (Connection conn = getConnection(); PreparedStatement stmt = conn.prepareStatement(sql)) {
+            // ХЕШИРУЕМ НОВЫЙ ПАРОЛЬ
+            String hashedPassword = bcryptHasher.hashToString(12, newPassword.toCharArray());
+
+            stmt.setString(1, hashedPassword);
+            stmt.setInt(2, userId);
+            boolean success = stmt.executeUpdate() > 0;
+
+            if (success) {
+                System.out.println("✅ Пароль обновлен для пользователя ID: " + userId);
+            } else {
+                System.out.println("❌ Не удалось обновить пароль для пользователя ID: " + userId);
+            }
+
+            return success;
+        } catch (SQLException e) {
+            System.out.println("❌ Ошибка обновления пароля: " + e.getMessage());
+            e.printStackTrace();
+            return false;
+        }
+    }
+
+
 }

@@ -62,5 +62,44 @@ public class AdminController {
             boolean success = DatabaseService.unblockUser(userId);
             ctx.json(Map.of("success", success));
         });
+
+        // Добавьте этот метод в класс AuthController
+        app.post("/api/forgot-password", ctx -> {
+            String username = ctx.formParam("username");
+
+            System.out.println("🔐 Запрос восстановления пароля для: " + username);
+
+            if (username == null || username.trim().isEmpty()) {
+                ctx.json(Map.of("success", false, "message", "Введите имя пользователя"));
+                return;
+            }
+
+            // Ищем пользователя
+            User user = DatabaseService.getUserByUsername(username);
+            if (user == null) {
+                // Для безопасности не сообщаем, что пользователь не существует
+                ctx.json(Map.of("success", true, "message", "Если пользователь существует, на его email отправлен временный пароль"));
+                return;
+            }
+
+            // Генерируем временный пароль
+            String tempPassword = EmailService.generateTempPassword();
+
+            // Обновляем пароль в базе данных
+            boolean passwordUpdated = DatabaseService.updateUserPassword(user.getId(), tempPassword);
+
+            if (passwordUpdated) {
+                // Отправляем email с временным паролем
+                boolean emailSent = EmailService.sendPasswordResetEmail(user.getEmail(), tempPassword);
+
+                if (emailSent) {
+                    ctx.json(Map.of("success", true, "message", "Временный пароль отправлен на ваш email"));
+                } else {
+                    ctx.json(Map.of("success", false, "message", "Ошибка отправки email. Обратитесь к администратору."));
+                }
+            } else {
+                ctx.json(Map.of("success", false, "message", "Ошибка обновления пароля"));
+            }
+        });
     }
 }
