@@ -15,7 +15,7 @@ public class AuthController {
                 return;
             }
 
-            User user = DatabaseService.authenticateUser(username, password);
+            User user = DatabaseService.authenticateUser(username.trim(), password);
             if (user != null) {
                 System.out.println("✅ Успешный вход: " + username + " (роль: " + user.getRole() + ")");
                 DatabaseService.updateUserOnlineStatus(user.getId(), true);
