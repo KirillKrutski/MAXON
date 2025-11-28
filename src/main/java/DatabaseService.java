@@ -1,10 +1,15 @@
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.sql.*;
-import java.time.LocalDateTime;
 import java.util.*;
 import javax.sql.DataSource;
 import com.zaxxer.hikari.HikariDataSource;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import at.favre.lib.crypto.bcrypt.BCrypt;
+import io.javalin.http.Context;
+import io.javalin.http.UploadedFile;
+import org.jetbrains.annotations.NotNull;
 
 public class DatabaseService {
     private static DataSource dataSource;
@@ -46,32 +51,43 @@ public class DatabaseService {
 
 
     public static boolean registerUser(String username, String password, String email) {
+        System.out.println("🔐 Регистрация пользователя: " + username);
+
         // Сначала проверяем, нет ли уже такого пользователя или email
         String checkSql = "SELECT id FROM users WHERE username = ? OR email = ?";
         String insertSql = "INSERT INTO users (username, password, email) VALUES (?, ?, ?)";
 
         try (Connection conn = getConnection();
-             PreparedStatement checkStmt = conn.prepareStatement(checkSql);
-             PreparedStatement insertStmt = conn.prepareStatement(insertSql)) {
-            String hashedPassword = bcryptHasher.hashToString(12, password.toCharArray());
+             PreparedStatement checkStmt = conn.prepareStatement(checkSql)) {
 
-            // Проверяем существование пользователя или email
-            checkStmt.setString(1, username);
-            checkStmt.setString(2, email);
-            ResultSet rs = checkStmt.executeQuery();
-            if (rs.next()) {
-                System.out.println("❌ Пользователь " + username + " или email " + email + " уже существует");
-                return false; // Пользователь или email уже существует
+            // 1. ПРОВЕРКА СУЩЕСТВОВАНИЯ ПОЛЬЗОВАТЕЛЯ
+            System.out.println("🔍 Проверка существования пользователя...");
+            checkStmt.setString(1, username);  // Параметр 1 для checkStmt
+            checkStmt.setString(2, email);     // Параметр 2 для checkStmt
+
+            try (ResultSet rs = checkStmt.executeQuery()) {
+                if (rs.next()) {
+                    System.out.println("❌ Пользователь " + username + " или email " + email + " уже существует");
+                    return false;
+                }
             }
 
-            // Регистрируем нового пользователя
-            insertStmt.setString(1, username);
-            insertStmt.setString(2, hashedPassword);
-            insertStmt.setString(3, email);
+            // 2. ХЭШИРОВАНИЕ ПАРОЛЯ
+            System.out.println("🔒 Хэширование пароля...");
+            String hashedPassword = bcryptHasher.hashToString(12, password.toCharArray());
+            System.out.println("✅ Пароль успешно хэширован");
 
-            int affectedRows = insertStmt.executeUpdate();
-            System.out.println("✅ Зарегистрирован новый пользователь: " + username + " (" + email + ")");
-            return affectedRows > 0;
+            // 3. РЕГИСТРАЦИЯ НОВОГО ПОЛЬЗОВАТЕЛЯ
+            System.out.println("📝 Регистрация нового пользователя...");
+            try (PreparedStatement insertStmt = conn.prepareStatement(insertSql)) {
+                insertStmt.setString(1, username);        // Параметр 1 для insertStmt
+                insertStmt.setString(2, hashedPassword);  // Параметр 2 для insertStmt
+                insertStmt.setString(3, email);           // Параметр 3 для insertStmt
+
+                int affectedRows = insertStmt.executeUpdate();
+                System.out.println("✅ Успешно зарегистрирован пользователь: " + username + " (" + email + ")");
+                return affectedRows > 0;
+            }
 
         } catch (SQLException e) {
             System.out.println("❌ Ошибка регистрации пользователя " + username + ": " + e.getMessage());
@@ -161,20 +177,41 @@ public class DatabaseService {
     }
 
     public static int createPrivateChat(int user1Id, int user2Id) {
-        String sql = "INSERT INTO chats (is_group, created_by) VALUES (false, ?) RETURNING id";
-        try (Connection conn = getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
+        // Сначала проверяем, нет ли уже такого чата
+        String checkSql = "SELECT c.id FROM chats c " +
+                "JOIN chat_participants cp1 ON c.id = cp1.chat_id " +
+                "JOIN chat_participants cp2 ON c.id = cp2.chat_id " +
+                "WHERE c.is_group = false AND cp1.user_id = ? AND cp2.user_id = ?";
 
-            stmt.setInt(1, user1Id);
-            ResultSet rs = stmt.executeQuery();
+        String insertSql = "INSERT INTO chats (is_group, created_by) VALUES (false, ?) RETURNING id";
+
+        try (Connection conn = getConnection();
+             PreparedStatement checkStmt = conn.prepareStatement(checkSql);
+             PreparedStatement insertStmt = conn.prepareStatement(insertSql)) {
+
+            // Проверяем существующий чат
+            checkStmt.setInt(1, user1Id);
+            checkStmt.setInt(2, user2Id);
+            ResultSet rs = checkStmt.executeQuery();
+
+            if (rs.next()) {
+                return rs.getInt("id"); // Возвращаем существующий чат
+            }
+
+            // Создаем новый чат
+            insertStmt.setInt(1, user1Id);
+            rs = insertStmt.executeQuery();
 
             if (rs.next()) {
                 int chatId = rs.getInt(1);
+                // Добавляем участников
                 addParticipantToChat(chatId, user1Id);
                 addParticipantToChat(chatId, user2Id);
+                System.out.println("💬 Создан приватный чат " + chatId + " между " + user1Id + " и " + user2Id);
                 return chatId;
             }
         } catch (SQLException e) {
+            System.out.println("❌ Ошибка создания чата: " + e.getMessage());
             e.printStackTrace();
         }
         return -1;
@@ -240,30 +277,50 @@ public class DatabaseService {
             stmt.setInt(1, chatId);
             stmt.setInt(2, senderId);
             stmt.setString(3, content);
-            return stmt.executeUpdate() > 0;
+
+            boolean success = stmt.executeUpdate() > 0;
+            if (success) {
+                System.out.println("💬 Сообщение отправлено в чат " + chatId + " от пользователя " + senderId + ": " + content);
+            } else {
+                System.out.println("❌ Не удалось отправить сообщение");
+            }
+            return success;
         } catch (SQLException e) {
+            System.out.println("❌ Ошибка отправки сообщения: " + e.getMessage());
             e.printStackTrace();
             return false;
         }
     }
 
+    // Метод для получения сообщений чата
     public static List<Message> getChatMessages(int chatId) {
         List<Message> messages = new ArrayList<>();
-        String sql = "SELECT m.*, u.username as sender_name FROM messages m " +
+        String sql = "SELECT m.*, u.username as sender_name, u.profile_image as sender_avatar " +
+                "FROM messages m " +
                 "JOIN users u ON m.sender_id = u.id " +
                 "WHERE m.chat_id = ? AND m.is_deleted = false " +
                 "ORDER BY m.created_at ASC";
+
         try (Connection conn = getConnection(); PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setInt(1, chatId);
             ResultSet rs = stmt.executeQuery();
+
             while (rs.next()) {
-                messages.add(mapMessage(rs));
+                Message message = mapMessage(rs);
+                message.setSenderName(rs.getString("sender_name"));
+
+                // Устанавливаем информацию об отправителе через senderName
+                // (метод setSender не существует в классе Message)
+                messages.add(message);
             }
         } catch (SQLException e) {
+            System.out.println("❌ Ошибка получения сообщений: " + e.getMessage());
             e.printStackTrace();
         }
         return messages;
     }
+
+
 
     private static Message getLastMessage(int chatId) {
         String sql = "SELECT m.*, u.username as sender_name FROM messages m " +
@@ -484,9 +541,19 @@ public class DatabaseService {
         User user = new User();
         user.setId(rs.getInt("id"));
         user.setUsername(rs.getString("username"));
-        user.setEmail(rs.getString("email")); // Добавьте эту строку
+        user.setPassword(rs.getString("password"));
+        user.setEmail(rs.getString("email"));
         user.setRole(rs.getString("role"));
+        user.setProfileImage(rs.getString("profile_image"));
+        user.setOnline(rs.getBoolean("is_online"));
         user.setBlocked(rs.getBoolean("is_blocked"));
+        user.setOnline(rs.getBoolean("is_online"));
+
+
+        Timestamp lastSeen = rs.getTimestamp("last_seen");
+        if (lastSeen != null) {
+            user.setLastSeen(lastSeen.toLocalDateTime());
+        }
 
         Timestamp blockedUntil = rs.getTimestamp("blocked_until");
         if (blockedUntil != null) {
@@ -686,6 +753,49 @@ public class DatabaseService {
         }
     }
 
+    public static void updateUserOnlineStatus(int userId, boolean isOnline) {
+        String sql = "UPDATE users SET is_online = ?, last_seen = CURRENT_TIMESTAMP WHERE id = ?";
+        try (Connection conn = getConnection(); PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setBoolean(1, isOnline);
+            stmt.setInt(2, userId);
+            stmt.executeUpdate();
+        } catch (SQLException e) {
+            System.out.println("❌ Ошибка обновления статуса: " + e.getMessage());
+        }
+    }
+
+    private static String getFileExtension(String filename) {
+        if (filename == null) return ".jpg";
+        int lastDot = filename.lastIndexOf(".");
+        return lastDot > 0 ? filename.substring(lastDot) : ".jpg";
+    }
+
+
+    public static void serveFile(@NotNull Context ctx, String filename) {
+        try {
+            java.nio.file.Path filePath = Paths.get("uploads/" + filename);
+            if (Files.exists(filePath)) {
+                byte[] fileBytes = Files.readAllBytes(filePath);
+
+                // Определяем Content-Type по расширению файла
+                String contentType = "application/octet-stream";
+                if (filename.toLowerCase().endsWith(".jpg") || filename.toLowerCase().endsWith(".jpeg")) {
+                    contentType = "image/jpeg";
+                } else if (filename.toLowerCase().endsWith(".png")) {
+                    contentType = "image/png";
+                }
+
+                ctx.contentType(contentType);
+                ctx.result(fileBytes);
+            } else {
+                ctx.status(404).result("File not found");
+            }
+        } catch (Exception e) {
+            System.out.println("❌ Ошибка отдачи файла: " + e.getMessage());
+            ctx.status(500).result("Error serving file");
+        }
+    }
+
     private static void addContact(Connection conn, int userId, int contactId) throws SQLException {
         String sql = "INSERT INTO contacts (user_id, contact_id) VALUES (?, ?) ON CONFLICT (user_id, contact_id) DO NOTHING";
         PreparedStatement stmt = conn.prepareStatement(sql);
@@ -747,6 +857,42 @@ public class DatabaseService {
             return false;
         }
     }
+
+    public static boolean updateUserAvatar(int userId, UploadedFile file) {
+        String originalFilename = file.filename();
+        String fileExtension = getFileExtension(originalFilename);
+        String filename = "avatar_" + userId + "_" + System.currentTimeMillis() + fileExtension;
+        String uploadDir = "uploads/";
+
+        try {
+            // Создаем директорию если нет
+            Files.createDirectories(Paths.get(uploadDir));
+
+            // Сохраняем файл
+            java.nio.file.Path filePath = Paths.get(uploadDir + filename);
+            Files.copy(file.content(), filePath, StandardCopyOption.REPLACE_EXISTING);
+
+            System.out.println("✅ Файл сохранен: " + filename);
+
+            // Обновляем в БД
+            String sql = "UPDATE users SET profile_image = ? WHERE id = ?";
+            try (Connection conn = getConnection(); PreparedStatement stmt = conn.prepareStatement(sql)) {
+                stmt.setString(1, filename);
+                stmt.setInt(2, userId);
+                boolean success = stmt.executeUpdate() > 0;
+
+                if (success) {
+                    System.out.println("✅ Аватар обновлен в БД для пользователя: " + userId);
+                }
+                return success;
+            }
+        } catch (Exception e) {
+            System.out.println("❌ Ошибка загрузки аватарки: " + e.getMessage());
+            e.printStackTrace();
+            return false;
+        }
+    }
+
 
 
 }

@@ -8,6 +8,7 @@ public class Message {
     private String content;
     private boolean isDeleted;
     private LocalDateTime createdAt;
+    private User sender;
 
     // Конструкторы
     public Message() {
@@ -55,6 +56,9 @@ public class Message {
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
 
+    public User getSender() { return sender; }
+    public void setSender(User sender) { this.sender = sender; }
+
     // Бизнес-логика
     public String getDisplayContent() {
         return isDeleted ? "Сообщение удалено" : content;
@@ -72,6 +76,15 @@ public class Message {
     public static Builder builder() {
         return new Builder();
     }
+
+    // Метод для получения URL аватарки отправителя
+    public String getSenderAvatarUrl() {
+        if (sender != null && sender.getProfileImage() != null && !sender.getProfileImage().isEmpty()) {
+            return "/api/files/" + sender.getProfileImage();
+        }
+        return "/images/default-avatar.png";
+    }
+
 
     public static class Builder {
         private int id;

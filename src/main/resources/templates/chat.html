@@ -5,6 +5,55 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Chat Application</title>
     <link rel="stylesheet" href="/css/style.css">
+    <style>
+        .avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 2px solid #ddd;
+        }
+
+        .avatar-small {
+            width: 30px;
+            height: 30px;
+        }
+
+        .avatar-large {
+            width: 80px;
+            height: 80px;
+        }
+
+        .status-online {
+            color: #28a745;
+            font-size: 0.8rem;
+        }
+
+        .status-offline {
+            color: #6c757d;
+            font-size: 0.8rem;
+        }
+
+        .message-avatar {
+            margin-right: 10px;
+        }
+
+        .upload-avatar-btn {
+            position: relative;
+            overflow: hidden;
+            display: inline-block;
+        }
+
+        .upload-avatar-btn input[type=file] {
+            position: absolute;
+            left: 0;
+            top: 0;
+            opacity: 0;
+            cursor: pointer;
+            width: 100%;
+            height: 100%;
+        }
+    </style>
 </head>
 <body>
 <div class="chat-container">
@@ -13,7 +62,18 @@
         <div class="sidebar-header">
             <h2>💬 Чаты</h2>
             <div class="user-info">
-                <span th:text="${username}">Пользователь</span>
+                <div class="user-avatar-container">
+                    <img id="userAvatar" class="avatar" th:src="${user.profileImageUrl}"
+                         src="/images/default-avatar.png" alt="avatar">
+                    <div class="upload-avatar-btn">
+                        <button class="btn-small">📷</button>
+                        <input type="file" id="avatarUpload" accept=".jpg,.jpeg,.png" style="display: none;">
+                    </div>
+                </div>
+                <div class="user-details">
+                    <span th:text="${username}">Пользователь</span>
+                    <div id="userStatus" class="status-online">🟢 В сети</div>
+                </div>
                 <div class="user-actions">
                     <button onclick="showChangePasswordModal()" class="btn-secondary" title="Сменить пароль">🔑</button>
                     <button onclick="logout()" class="btn-secondary">🚪 Выйти</button>
@@ -102,6 +162,7 @@
 <script>
     let currentUser = null;
     let currentChat = null;
+    let messagePollingInterval = null;
 
     // ==================== ИНИЦИАЛИЗАЦИЯ ====================
     document.addEventListener('DOMContentLoaded', function() {
@@ -110,14 +171,26 @@
     });
 
     // Загрузка информации о текущем пользователе
+
+    // Загрузка информации о текущем пользователе
     async function loadUser() {
         try {
             const response = await fetch('/api/user/current');
             if (response.ok) {
                 currentUser = await response.json();
-                console.log("✅ Пользователь загружен:", currentUser.username);
+                console.log("✅ Пользователь загружен:", currentUser.username, "Статус:", currentUser.online ? "онлайн" : "оффлайн");
+
+                // Обновляем статус сразу после загрузки
+                updateUserStatus();
+
+                // Отмечаем пользователя онлайн
+                await fetch('/api/user/ping', { method: 'POST' });
+
                 loadFriendRequests();
                 loadContacts();
+
+                // Запускаем периодическое обновление статуса
+                setInterval(updateUserStatus, 30000);
             } else {
                 console.error("❌ Пользователь не авторизован");
                 window.location.href = '/';
@@ -125,6 +198,33 @@
         } catch (error) {
             console.error('❌ Ошибка загрузки пользователя:', error);
             window.location.href = '/';
+        }
+    }
+
+    // Обновление статуса текущего пользователя
+    // Обновление статуса текущего пользователя
+    async function updateUserStatus() {
+        try {
+            // Обновляем данные пользователя с сервера
+            const response = await fetch('/api/user/current');
+            if (response.ok) {
+                const updatedUser = await response.json();
+                currentUser = updatedUser;
+
+                const statusElement = document.getElementById('userStatus');
+                if (statusElement) {
+                    if (currentUser.online) {
+                        statusElement.textContent = '🟢 В сети';
+                        statusElement.className = 'status-online';
+                    } else {
+                        const lastSeenText = formatLastSeen(currentUser.lastSeen);
+                        statusElement.textContent = `⚫ Был(а) ${lastSeenText}`;
+                        statusElement.className = 'status-offline';
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('❌ Ошибка обновления статуса:', error);
         }
     }
 
@@ -415,6 +515,7 @@
     }
 
     // Отображение контактов
+    // Отображение контактов
     function displayContacts(contacts) {
         const container = document.getElementById('contactsList');
 
@@ -423,62 +524,205 @@
             return;
         }
 
-        container.innerHTML = contacts.map(contact => `
-                <div class="contact-item" data-user-id="${contact.id}">
-                    <div class="contact-avatar">👤</div>
-                    <div class="contact-info">
-                        <div class="contact-name">${contact.username}</div>
-                        <div class="contact-status">🟢 В сети</div>
-                    </div>
-                    <button class="btn-small start-chat-btn"
-                            onclick="startChat(${contact.id}, '${contact.username}')"
-                            title="Начать чат">
-                        💬 Чат
-                    </button>
+        container.innerHTML = contacts.map(contact => {
+            // Используем isOnline вместо online
+            const isOnline = contact.online || contact.isOnline;
+            const status = isOnline ? '🟢 В сети' : `⚫ Был(а) ${formatLastSeen(contact.lastSeen)}`;
+            const statusClass = isOnline ? 'status-online' : 'status-offline';
+
+            return `
+            <div class="contact-item" data-user-id="${contact.id}">
+                <div class="contact-avatar">
+                    <img src="${contact.profileImageUrl || '/images/default-avatar.png'}"
+                         class="avatar avatar-small" alt="${contact.username}">
                 </div>
-            `).join('');
+                <div class="contact-info">
+                    <div class="contact-name">${contact.username}</div>
+                    <div class="contact-status ${statusClass}">${status}</div>
+                </div>
+                <button class="btn-small start-chat-btn"
+                        onclick="startChat(${contact.id}, '${contact.username}')"
+                        title="Начать чат">
+                    💬 Чат
+                </button>
+            </div>
+        `;
+        }).join('');
+    }
+
+    // Форматирование времени последней активности
+    function formatLastSeen(lastSeen) {
+        if (!lastSeen) return 'давно';
+
+        try {
+            const lastSeenDate = new Date(lastSeen);
+            const now = new Date();
+            const diffMs = now - lastSeenDate;
+            const diffMinutes = Math.floor(diffMs / (1000 * 60));
+            const diffSeconds = Math.floor(diffMs / 1000);
+
+            if (diffSeconds < 30) return 'только что';
+            if (diffMinutes < 1) return 'менее минуты назад';
+            if (diffMinutes < 60) return `${diffMinutes} мин назад`;
+            if (diffMinutes < 1440) return `${Math.floor(diffMinutes / 60)} ч назад`;
+
+            return lastSeenDate.toLocaleDateString('ru-RU', {
+                day: 'numeric',
+                month: 'short',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        } catch (e) {
+            return 'недавно';
+        }
     }
 
     // Начало чата
-    function startChat(userId, username) {
+    async function startChat(userId, username) {
         console.log("💬 Начало чата с:", username, "ID:", userId);
 
-        // Показываем область чата
-        document.querySelector('.no-chat-selected').classList.add('hidden');
-        document.getElementById('activeChat').classList.remove('hidden');
+        try {
+            // Создаем или получаем приватный чат
+            const response = await fetch('/api/chats/private', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: `otherUserId=${userId}`
+            });
 
-        // Устанавливаем информацию о чате
-        document.getElementById('chatTitle').textContent = username;
-        document.getElementById('chatParticipants').textContent = `Участники: ${username}`;
+            const data = await response.json();
 
-        // Активируем поле ввода
-        document.getElementById('messageInput').disabled = false;
-        document.getElementById('sendMessageBtn').disabled = false;
+            if (data.success && data.chatId) {
+                // Сохраняем информацию о текущем чате
+                currentChat = {
+                    id: data.chatId, // Используем ID чата, а не ID пользователя
+                    userId: userId,
+                    name: username,
+                    isPrivate: true
+                };
 
-        // Фокусируемся на поле ввода
-        document.getElementById('messageInput').focus();
+                // Показываем область чата
+                document.querySelector('.no-chat-selected').classList.add('hidden');
+                document.getElementById('activeChat').classList.remove('hidden');
 
-        // Сохраняем информацию о текущем чате
-        currentChat = {
-            id: userId,
-            name: username,
-            isPrivate: true
-        };
+                // Устанавливаем информацию о чате
+                document.getElementById('chatTitle').textContent = username;
+                document.getElementById('chatParticipants').textContent = `Участники: ${username}`;
 
-        // TODO: Загрузить историю сообщений
-        loadChatMessages(userId);
+                // Активируем поле ввода
+                document.getElementById('messageInput').disabled = false;
+                document.getElementById('sendMessageBtn').disabled = false;
+
+                // Фокусируемся на поле ввода
+                document.getElementById('messageInput').focus();
+
+                // Загружаем историю сообщений
+                await loadChatMessages(data.chatId);
+
+                // Запускаем автообновление сообщений
+                startMessagePolling(data.chatId);
+            } else {
+                alert('❌ Ошибка создания чата: ' + data.message);
+            }
+        } catch (error) {
+            console.error('💥 Ошибка начала чата:', error);
+            alert('💥 Ошибка соединения с сервером');
+        }
     }
 
-    // Загрузка сообщений чата (заглушка)
+    // Загрузка сообщений чата
     async function loadChatMessages(chatId) {
         console.log("📨 Загрузка сообщений для чата ID:", chatId);
-        // TODO: Реализовать загрузку сообщений
-        document.getElementById('messagesContainer').innerHTML = `
+
+        try {
+            const response = await fetch(`/api/chats/${chatId}/messages`);
+            if (!response.ok) {
+                throw new Error('Ошибка загрузки сообщений');
+            }
+
+            const messages = await response.json();
+            displayMessages(messages);
+        } catch (error) {
+            console.error('❌ Ошибка загрузки сообщений:', error);
+            document.getElementById('messagesContainer').innerHTML = `
+                <div class="no-messages">
+                    <p>❌ Ошибка загрузки сообщений</p>
+                </div>
+            `;
+        }
+    }
+
+    // Отображение сообщений
+    function displayMessages(messages) {
+        const container = document.getElementById('messagesContainer');
+
+        if (messages.length === 0) {
+            container.innerHTML = `
                 <div class="no-messages">
                     <p>💬 Начните общение с этим пользователем!</p>
                     <p><em>Отправьте первое сообщение</em></p>
                 </div>
             `;
+            return;
+        }
+
+        container.innerHTML = messages.map(message => {
+            const isOwnMessage = message.senderId === currentUser.id;
+            const messageTime = new Date(message.createdAt).toLocaleTimeString('ru-RU', {
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+
+            return `
+                <div class="message-item ${isOwnMessage ? 'own' : 'other'}">
+                    <div class="message-header">
+                        <span class="message-sender">${message.senderName}</span>
+                        <span class="message-time">${messageTime}</span>
+                    </div>
+                    <div class="message-content">${message.content}</div>
+                    ${!message.isDeleted ? `
+                        <div class="message-actions">
+                            ${isOwnMessage ? `
+                                <button class="message-action delete-message"
+                                        onclick="deleteMessage(${message.id})"
+                                        title="Удалить сообщение">🗑️</button>
+                            ` : `
+                                <button class="message-action report-message"
+                                        onclick="reportMessage(${message.id})"
+                                        title="Пожаловаться">⚠️</button>
+                            `}
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+        }).join('');
+
+        // Прокручиваем вниз
+        container.scrollTop = container.scrollHeight;
+    }
+
+    // Запуск автообновления сообщений
+    function startMessagePolling(chatId) {
+        // Останавливаем предыдущий интервал
+        if (messagePollingInterval) {
+            clearInterval(messagePollingInterval);
+        }
+
+        // Запускаем новый интервал
+        messagePollingInterval = setInterval(async () => {
+            if (currentChat && currentChat.id === chatId) {
+                await loadChatMessages(chatId);
+            }
+        }, 2000); // Обновляем каждые 2 секунды
+    }
+
+    // Остановка автообновления
+    function stopMessagePolling() {
+        if (messagePollingInterval) {
+            clearInterval(messagePollingInterval);
+            messagePollingInterval = null;
+        }
     }
 
     // Отправка сообщения
@@ -495,13 +739,75 @@
             return;
         }
 
-        console.log("📤 Отправка сообщения:", content);
+        console.log("📤 Отправка сообщения в чат:", currentChat.id, "Текст:", content);
 
-        // TODO: Реализовать отправку сообщения
-        alert('📤 Функция отправки сообщений будет реализована в следующем обновлении!');
+        try {
+            const messageResponse = await fetch('/api/messages/send', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: `chatId=${currentChat.id}&content=${encodeURIComponent(content)}`
+            });
 
-        // Очищаем поле ввода
-        messageInput.value = '';
+            const messageData = await messageResponse.json();
+
+            if (messageData.success) {
+              //  console.log("✅ Сообщение отправлено!");
+                // Очищаем поле ввода
+                messageInput.value = '';
+                // Немедленно обновляем сообщения
+                await loadChatMessages(currentChat.id);
+            } else {
+                alert('❌ Ошибка отправки сообщения: ' + messageData.message);
+            }
+        } catch (error) {
+            console.error('💥 Ошибка отправки сообщения:', error);
+            alert('💥 Ошибка соединения с сервером');
+        }
+    }
+
+    // Удаление сообщения
+    async function deleteMessage(messageId) {
+        if (!confirm('Удалить это сообщение?')) return;
+
+        try {
+            const response = await fetch(`/api/messages/${messageId}`, {
+                method: 'DELETE'
+            });
+
+            const data = await response.json();
+            if (data.success && currentChat) {
+                await loadChatMessages(currentChat.id);
+            }
+        } catch (error) {
+            console.error('Ошибка удаления сообщения:', error);
+        }
+    }
+
+    // Жалоба на сообщение
+    async function reportMessage(messageId) {
+        const reason = prompt('Введите причину жалобы:');
+        if (!reason) return;
+
+        try {
+            const response = await fetch('/api/reports', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: `messageId=${messageId}&reason=${encodeURIComponent(reason)}`
+            });
+
+            const data = await response.json();
+            if (data.success) {
+                alert('Жалоба отправлена администратору');
+            } else {
+                alert('Ошибка отправки жалобы');
+            }
+        } catch (error) {
+            console.error('Ошибка отправки жалобы:', error);
+        }
     }
 
     // Обработчик нажатия Enter в поле ввода
@@ -522,6 +828,9 @@
         if (!confirm('Вы уверены, что хотите выйти?')) {
             return;
         }
+
+        // Останавливаем автообновление сообщений
+        stopMessagePolling();
 
         try {
             const response = await fetch('/api/logout', {
@@ -563,8 +872,55 @@
         if (currentUser) {
             loadFriendRequests();
             loadContacts();
+            updateUserStatus();
         }
     }, 10000);
+
+    // Загрузка аватарки
+    document.getElementById('avatarUpload').addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (file) {
+            uploadAvatar(file);
+        }
+    });
+
+    async function uploadAvatar(file) {
+        const formData = new FormData();
+        formData.append('avatar', file);
+
+        try {
+            const response = await fetch('/api/profile/upload-avatar', {
+                method: 'POST',
+                body: formData
+            });
+
+            const data = await response.json();
+            if (data.success) {
+                alert('Аватар обновлен!');
+                location.reload(); // Перезагружаем для обновления аватарки
+            } else {
+                alert('Ошибка: ' + data.message);
+            }
+        } catch (error) {
+            console.error('Ошибка загрузки аватарки:', error);
+            alert('Ошибка загрузки файла');
+        }
+    }
+
+    // Обновление статуса онлайн каждые 30 секунд
+    setInterval(() => {
+        fetch('/api/user/ping', { method: 'POST' });
+    }, 30000);
+
+    // При загрузке страницы отмечаем онлайн
+    window.addEventListener('load', () => {
+        fetch('/api/user/ping', { method: 'POST' });
+    });
+
+    // При закрытии страницы отмечаем оффлайн
+    window.addEventListener('beforeunload', () => {
+        navigator.sendBeacon('/api/user/logout');
+    });
 </script>
 </body>
 </html>

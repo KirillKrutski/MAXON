@@ -9,19 +9,15 @@ public class User {
     private LocalDateTime blockedUntil;
     private LocalDateTime createdAt;
     private String email;
+    private String profileImage;
+    private boolean isOnline;
+    private LocalDateTime lastSeen;
 
     // Конструкторы
     public User() {
         this.role = "USER";
         this.isBlocked = false;
         this.createdAt = LocalDateTime.now();
-    }
-
-    public User(String username, String password, String email) {
-        this();
-        this.username = username;
-        this.password = password;
-        this.email = email;
     }
 
     public User(int id, String username, String password, String email, String role, boolean isBlocked,
@@ -59,7 +55,6 @@ public class User {
     public void setEmail(String email) {
         this.email = email;
     }
-
 
     public String getPassword() {
         return password;
@@ -100,6 +95,18 @@ public class User {
     public void setCreatedAt(LocalDateTime createdAt) {
         this.createdAt = createdAt;
     }
+
+    public void setProfileImage(String profileImage) { this.profileImage = profileImage; }
+
+    public String getProfileImage() { return profileImage; }
+
+    public void setOnline(boolean online) { isOnline = online; }
+
+    public boolean getIsOnline() { return isOnline; }
+
+    public void setLastSeen(LocalDateTime lastSeen) { this.lastSeen = lastSeen; }
+
+    public LocalDateTime getLastSeen() { return lastSeen; }
 
     // Вспомогательные методы
     public boolean isAdmin() {
@@ -248,9 +255,28 @@ public class User {
                 role != null && (role.equals("USER") || role.equals("ADMIN"));
     }
 
-
     // Проверка минимальных требований к паролю
     public boolean hasValidPassword() {
         return password != null && password.length() >= 3;
+    }
+
+    // Метод для получения статуса онлайн
+    public String getStatus() {
+        if (isOnline) {
+            return "🟢 В сети";
+        } else if (lastSeen != null) {
+            long minutesAgo = java.time.Duration.between(lastSeen, LocalDateTime.now()).toMinutes();
+            if (minutesAgo < 5) return "🟡 Был(а) только что";
+            else if (minutesAgo < 60) return "⚫ Был(а) " + minutesAgo + " мин назад";
+            else return "⚫ Был(а) " + (minutesAgo / 60) + " ч назад";
+        }
+        return "⚫ Не в сети";
+    }
+
+    public String getProfileImageUrl() {
+        if (profileImage != null && !profileImage.isEmpty()) {
+            return "/api/files/" + profileImage;
+        }
+        return "/images/default-avatar.png"; // Дефолтная аватарка
     }
 }

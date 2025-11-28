@@ -18,6 +18,7 @@ public class AuthController {
             User user = DatabaseService.authenticateUser(username, password);
             if (user != null) {
                 System.out.println("✅ Успешный вход: " + username + " (роль: " + user.getRole() + ")");
+                DatabaseService.updateUserOnlineStatus(user.getId(), true);
                 ctx.sessionAttribute("user", user);
                 ctx.json(Map.of("success", true, "role", user.getRole()));
             } else {
@@ -165,7 +166,13 @@ public class AuthController {
 
         // Выход
         app.post("/api/logout", ctx -> {
-            System.out.println("🚪 Выход пользователя");
+            User currentUser = ctx.sessionAttribute("user");
+            if (currentUser != null) {
+                System.out.println("🚪 Выход пользователя: " + currentUser.getUsername());
+
+                // ОБНОВЛЯЕМ СТАТУС ОФФЛАЙН
+                DatabaseService.updateUserOnlineStatus(currentUser.getId(), false);
+            }
             ctx.req().getSession().invalidate();
             ctx.redirect("/");
         });

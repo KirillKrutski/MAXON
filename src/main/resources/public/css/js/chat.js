@@ -179,7 +179,7 @@ class ChatManager {
 
     async loadMessages(chatId) {
         try {
-            const response = await fetch(`/api/chat/${chatId}/messages`);
+            const response = await fetch(`/api/chats/${chatId}/messages`);
             const messages = await response.json();
             this.messages.set(chatId, messages);
             this.displayMessages(messages);
@@ -241,7 +241,8 @@ class ChatManager {
         if (!content || !this.currentChat) return;
 
         try {
-            const response = await fetch('/api/message', {
+            // ИСПРАВЛЕННЫЙ URL - должен совпадать с бэкендом
+            const response = await fetch('/api/messages/send', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/x-www-form-urlencoded',
@@ -253,7 +254,9 @@ class ChatManager {
             if (data.success) {
                 input.value = '';
                 this.loadMessages(this.currentChat.id);
-                this.loadChats(); // Update last message in chats list
+                this.loadChats();
+            } else {
+                console.error('Send message failed:', data.message);
             }
         } catch (error) {
             console.error('Send message error:', error);
@@ -327,6 +330,7 @@ class ChatManager {
         document.getElementById('groupModal').classList.add('hidden');
     }
 
+
     async loadAvailableContacts() {
         try {
             const response = await fetch('/api/contacts');
@@ -388,16 +392,37 @@ class ChatManager {
 
     startPolling() {
         this.pollingInterval = setInterval(() => {
-            if (this.currentChat) {
-                this.loadMessages(this.currentChat.id);
+            if (currentUser) {
+                loadFriendRequests();
+                loadContacts();
+                updateUserStatus();
+
+                // Периодически отмечаем онлайн
+                fetch('/api/user/ping', { method: 'POST' }).catch(console.error);
             }
-            this.loadChats();
-        }, 3000); // Poll every 3 seconds
+        }, 10000);
+    }
+
+    async updateOnlineStatus() {
+        try {
+            await fetch('/api/user/ping', { method: 'POST' });
+        } catch (error) {
+            console.error('Status update error:', error);
+        }
     }
 
     stopPolling() {
         if (this.pollingInterval) {
             clearInterval(this.pollingInterval);
+        }
+        this.setOffline();
+    }
+
+    async setOffline() {
+        try {
+            await fetch('/api/user/logout', { method: 'POST' });
+        } catch (error) {
+            console.error('Offline status error:', error);
         }
     }
 
@@ -411,6 +436,33 @@ class ChatManager {
         }
     }
 }
+
+// При загрузке страницы отмечаем онлайн
+window.addEventListener('load', () => {
+    fetch('/api/user/ping', { method: 'POST' }).catch(console.error);
+});
+
+// При закрытии страницы отмечаем оффлайн
+window.addEventListener('beforeunload', () => {
+    // Используем sendBeacon для надежной отправки при закрытии
+    navigator.sendBeacon('/api/user/logout');
+});
+
+// При фокусе на окне отмечаем онлайн
+window.addEventListener('focus', () => {
+    fetch('/api/user/ping', { method: 'POST' }).catch(console.error);
+});
+
+// При уходе со страницы отмечаем оффлайн
+window.addEventListener('blur', () => {
+    // Можно добавить небольшую задержку перед установкой оффлайн
+    setTimeout(() => {
+        if (!document.hasFocus()) {
+            fetch('/api/user/logout', { method: 'POST' }).catch(console.error);
+        }
+    }, 30000); // 30 секунд после ухода
+});
+
 
 document.addEventListener('DOMContentLoaded', () => {
     window.chatManager = new ChatManager();
