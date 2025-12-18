@@ -1081,6 +1081,249 @@ async function uploadAvatar(file) {
     }
 }
 
+// ==================== СОЗДАНИЕ ГРУПП ====================
+
+// Показать модальное окно создания группы
+function showCreateGroupModal() {
+    const modal = document.getElementById('createGroupModal');
+    if (!modal) {
+        createGroupModal();
+        return;
+    }
+
+    document.getElementById('groupName').value = '';
+    loadContactsForGroup();
+    modal.classList.remove('hidden');
+}
+
+// Создать модальное окно группы
+function createGroupModal() {
+    const modalHTML = `
+    <div id="createGroupModal" class="modal hidden">
+        <div class="modal-content">
+            <h3>👥 Создать новую группу</h3>
+            
+            <div class="form-group">
+                <label for="groupName">Название группы:</label>
+                <input type="text" id="groupName" placeholder="Введите название группы" required>
+            </div>
+            
+            <div class="form-group">
+                <label>Выберите участников из контактов:</label>
+                <div id="groupParticipantsList" class="participants-list">
+                    <!-- Список контактов с чекбоксами -->
+                </div>
+            </div>
+            
+            <div class="selected-participants" id="selectedParticipants">
+                <h4>Выбранные участники (<span id="selectedCount">0</span>):</h4>
+                <div id="selectedParticipantsList"></div>
+            </div>
+            
+            <div class="modal-actions">
+                <button type="button" class="btn-secondary" onclick="hideCreateGroupModal()">Отмена</button>
+                <button type="button" class="btn-primary" onclick="createGroup()">Создать группу</button>
+            </div>
+            
+            <div id="createGroupMessage" class="message"></div>
+        </div>
+    </div>
+    `;
+
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+}
+
+// Скрыть модальное окно создания группы
+function hideCreateGroupModal() {
+    const modal = document.getElementById('createGroupModal');
+    if (modal) modal.classList.add('hidden');
+}
+
+// Загрузка контактов для выбора в группу
+function loadContactsForGroup() {
+    const contactsList = document.getElementById('groupParticipantsList');
+    const selectedList = document.getElementById('selectedParticipantsList');
+    const selectedCount = document.getElementById('selectedCount');
+
+    if (!contactsList) return;
+
+    // Загружаем контакты
+    fetch('/api/contacts')
+        .then(response => response.json())
+        .then(contacts => {
+            if (contacts.length === 0) {
+                contactsList.innerHTML = '<div class="no-contacts">У вас нет контактов</div>';
+                return;
+            }
+
+            contactsList.innerHTML = contacts.map(contact => `
+                <div class="participant-checkbox-item" data-user-id="${contact.id}">
+                    <input type="checkbox" id="contact_${contact.id}" 
+                           onchange="toggleParticipant(${contact.id}, '${contact.username}')">
+                    <div class="participant-info">
+                        <img src="${contact.profileImageUrl || '/images/default-avatar.png'}" 
+                             class="avatar avatar-small" alt="${contact.username}">
+                        <div style="margin-left: 10px;">
+                            <div>${contact.username}</div>
+                            <div class="contact-status">${contact.online ? '🟢 В сети' : '⚫ Не в сети'}</div>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+
+            // Очищаем выбранных участников
+            selectedList.innerHTML = '';
+            selectedCount.textContent = '0';
+        })
+        .catch(error => {
+            console.error('❌ Ошибка загрузки контактов:', error);
+            contactsList.innerHTML = '<div class="no-contacts">❌ Ошибка загрузки контактов</div>';
+        });
+}
+
+// Выбор/отмена выбора участника
+let selectedParticipants = new Map();
+
+function toggleParticipant(userId, username) {
+    const checkbox = document.getElementById(`contact_${userId}`);
+    const selectedList = document.getElementById('selectedParticipantsList');
+    const selectedCount = document.getElementById('selectedCount');
+
+    if (checkbox.checked) {
+        // Добавляем участника
+        selectedParticipants.set(userId, username);
+
+        const participantHTML = `
+            <div class="selected-participant-item" id="selected_${userId}">
+                ${username}
+                <span class="selected-participant-remove" onclick="removeParticipant(${userId})">×</span>
+            </div>
+        `;
+
+        selectedList.insertAdjacentHTML('beforeend', participantHTML);
+    } else {
+        // Удаляем участника
+        removeParticipant(userId);
+    }
+
+    // Обновляем счетчик
+    selectedCount.textContent = selectedParticipants.size;
+}
+
+// Удаление участника
+function removeParticipant(userId) {
+    selectedParticipants.delete(userId);
+
+    const selectedItem = document.getElementById(`selected_${userId}`);
+    if (selectedItem) {
+        selectedItem.remove();
+    }
+
+    const checkbox = document.getElementById(`contact_${userId}`);
+    if (checkbox) {
+        checkbox.checked = false;
+    }
+
+    const selectedCount = document.getElementById('selectedCount');
+    if (selectedCount) {
+        selectedCount.textContent = selectedParticipants.size;
+    }
+}
+
+// Создание группы
+async function createGroup() {
+    const groupName = document.getElementById('groupName').value.trim();
+    const messageElement = document.getElementById('createGroupMessage');
+
+    // Валидация
+    if (!groupName) {
+        showGroupMessage('Введите название группы', 'error');
+        return;
+    }
+
+    if (selectedParticipants.size < 2) {
+        showGroupMessage('Выберите минимум 2 участника', 'error');
+        return;
+    }
+
+    // Подготавливаем данные
+    const participantIds = Array.from(selectedParticipants.keys());
+
+    console.log("👥 Создание группы:", {
+        name: groupName,
+        participants: participantIds
+    });
+
+    try {
+        const response = await fetch('/api/chats/group', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                name: groupName,
+                participantIds: participantIds
+            })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            showGroupMessage('✅ Группа успешно создана!', 'success');
+
+            // Закрываем модальное окно через 2 секунды
+            setTimeout(() => {
+                hideCreateGroupModal();
+                // Перезагружаем чаты (если у вас есть такой функционал)
+                // loadChats();
+            }, 2000);
+        } else {
+            showGroupMessage('❌ ' + (data.message || 'Ошибка создания группы'), 'error');
+        }
+    } catch (error) {
+        console.error('💥 Ошибка создания группы:', error);
+        showGroupMessage('💥 Ошибка соединения с сервером', 'error');
+    }
+}
+
+// Показать сообщение в модальном окне
+function showGroupMessage(message, type) {
+    const element = document.getElementById('createGroupMessage');
+    element.textContent = message;
+    element.className = `message ${type}`;
+}
+
+// ==================== ЗАГРУЗКА ГРУППОВЫХ ЧАТОВ ====================
+
+// Функция для загрузки чатов (добавьте в вашу существующую логику)
+async function loadChats() {
+    try {
+        const response = await fetch('/api/chats');
+        if (!response.ok) throw new Error('Ошибка загрузки чатов');
+
+        const chats = await response.json();
+        displayChats(chats);
+    } catch (error) {
+        console.error('❌ Ошибка загрузки чатов:', error);
+    }
+}
+
+// Отображение чатов (обновите вашу существующую функцию)
+function displayChats(chats) {
+    // Разделяем чаты на приватные и групповые
+    const privateChats = chats.filter(chat => !chat.group);
+    const groupChats = chats.filter(chat => chat.group);
+
+    // Ваша логика отображения...
+}
+
+// Делаем функции глобально доступными
+window.showCreateGroupModal = showCreateGroupModal;
+window.hideCreateGroupModal = hideCreateGroupModal;
+window.toggleParticipant = toggleParticipant;
+window.removeParticipant = removeParticipant;
+window.createGroup = createGroup;
+
 // ==================== ГЛОБАЛЬНЫЕ ФУНКЦИИ ====================
 // Делаем функции доступными глобально
 window.searchUsers = searchUsers;

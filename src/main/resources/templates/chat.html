@@ -149,6 +149,96 @@
             border-radius: 10px;
             cursor: pointer;
         }
+
+        /* Стили для создания группы */
+        .participants-list {
+            max-height: 300px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            padding: 10px;
+            margin-top: 10px;
+        }
+
+        .participant-checkbox-item {
+            display: flex;
+            align-items: center;
+            padding: 8px;
+            border-bottom: 1px solid #eee;
+            cursor: pointer;
+        }
+
+        .participant-checkbox-item:hover {
+            background-color: #f5f5f5;
+        }
+
+        .participant-checkbox-item:last-child {
+            border-bottom: none;
+        }
+
+        .participant-checkbox-item input[type="checkbox"] {
+            margin-right: 10px;
+        }
+
+        .participant-info {
+            display: flex;
+            align-items: center;
+            flex: 1;
+        }
+
+        .selected-participants {
+            margin-top: 20px;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border-radius: 5px;
+            border: 1px solid #dee2e6;
+        }
+
+        .selected-participant-item {
+            display: inline-flex;
+            align-items: center;
+            background-color: #e9ecef;
+            padding: 5px 10px;
+            margin: 3px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+        }
+
+        .selected-participant-remove {
+            margin-left: 5px;
+            cursor: pointer;
+            color: #dc3545;
+            font-weight: bold;
+        }
+
+        .group-chat-item {
+            display: flex;
+            align-items: center;
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .group-chat-item:hover {
+            background-color: #f5f5f5;
+        }
+
+        .group-avatar {
+            font-size: 1.5rem;
+            margin-right: 10px;
+        }
+
+        .group-info {
+            flex: 1;
+        }
+
+        .group-name {
+            font-weight: bold;
+        }
+
+        .group-members {
+            font-size: 0.8rem;
+            color: #666;
+        }
     </style>
 </head>
 <body>
@@ -174,6 +264,7 @@
                     <button onclick="showChangePasswordModal()" class="btn-secondary" title="Сменить пароль">🔑</button>
                     <button onclick="logout()" class="btn-secondary">🚪 Выйти</button>
                 </div>
+                <button onclick="showCreateGroupModal()" class="btn-primary" title="Создать группу">👥 Создать группу</button>
             </div>
         </div>
 
@@ -1016,6 +1107,8 @@
         }
     }
 
+
+
     // Обновление статуса онлайн каждые 30 секунд
     setInterval(() => {
         fetch('/api/user/ping', { method: 'POST' });
@@ -1033,5 +1126,35 @@
 
 
 </script>
+
+<div id="createGroupModal" class="modal hidden">
+    <div class="modal-content">
+        <h3>👥 Создать новую группу</h3>
+
+        <div class="form-group">
+            <label for="groupName">Название группы:</label>
+            <input type="text" id="groupName" placeholder="Введите название группы" required>
+        </div>
+
+        <div class="form-group">
+            <label>Выберите участников из контактов:</label>
+            <div id="groupParticipantsList" class="participants-list">
+                <!-- Список контактов с чекбоксами -->
+            </div>
+        </div>
+
+        <div class="selected-participants" id="selectedParticipants">
+            <h4>Выбранные участники (0):</h4>
+            <div id="selectedParticipantsList"></div>
+        </div>
+
+        <div class="modal-actions">
+            <button type="button" class="btn-secondary" onclick="hideCreateGroupModal()">Отмена</button>
+            <button type="button" class="btn-primary" onclick="createGroup()">Создать группу</button>
+        </div>
+
+        <div id="createGroupMessage" class="message"></div>
+    </div>
+</div>
 </body>
 </html>
