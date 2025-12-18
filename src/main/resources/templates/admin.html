@@ -1,61 +1,373 @@
 <!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org">
+<html>
 <head>
     <meta charset="UTF-8">
     <title>Admin Panel</title>
     <link rel="stylesheet" href="/css/style.css">
+    <style>
+        .admin-container { padding: 20px; }
+        .admin-header {
+            background: #2c3e50;
+            color: white;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        .users-list {
+            border: 1px solid #ddd;
+            padding: 15px;
+            min-height: 300px;
+            background: white;
+        }
+        .user-item {
+            border: 1px solid #eee;
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 5px;
+        }
+        .user-item:hover {
+            background: #f8f9fa;
+        }
+        .no-data { padding: 20px; text-align: center; color: #666; }
+        .user-actions {
+            margin-top: 10px;
+        }
+        .block-btn {
+            background: #dc3545;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+        .unblock-btn {
+            background: #28a745;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+    </style>
 </head>
 <body>
 <div class="admin-container">
     <div class="admin-header">
-        <h1>Панель администратора</h1>
-        <div class="admin-actions">
-            <span th:text="${username}">Администратор</span>
-            <span class="admin-badge" th:text="${role}">ADMIN</span>
-            <button onclick="showChangePasswordModal()" class="btn-secondary" title="Сменить пароль">🔑</button>
-            <button onclick="logout()" class="btn-secondary">Выйти</button>
+        <h1>👑 Админ-панель</h1>
+        <div>
+            <button onclick="logout()" style="background:red; color:white; border:none; padding:8px 15px; border-radius:3px;">
+                Выйти
+            </button>
+            <button onclick="loadUsers()" style="background:green; color:white; border:none; padding:8px 15px; border-radius:3px; margin-left:10px;">
+                Обновить
+            </button>
         </div>
     </div>
 
-    <div class="admin-content">
-        <div class="reports-section">
-            <h2>Жалобы на сообщения</h2>
-            <div class="reports-list">
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+        <div>
+            <h2>📨 Жалобы</h2>
+            <div id="reportsList" class="users-list">
                 <div class="no-data">Жалоб нет</div>
             </div>
         </div>
 
-        <div class="users-section">
-            <h2>Управление пользователями</h2>
-            <div class="users-list">
-                <div class="no-data">Пользователи появятся здесь</div>
+        <div>
+            <h2>👥 Пользователи</h2>
+            <div style="margin-bottom: 10px;">
+                <input type="text" id="searchUsers" placeholder="Поиск..."
+                       style="width: 100%; padding: 8px; border: 1px solid #ddd;">
+            </div>
+            <div id="usersList" class="users-list">
+                <div class="no-data">Загрузка пользователей...</div>
             </div>
         </div>
     </div>
 </div>
 
+<!-- МОДАЛЬНОЕ ОКНО БЛОКИРОВКИ -->
+<div id="blockModal" class="modal hidden">
+    <div class="modal-content">
+        <h3>🔒 Блокировка пользователя</h3>
+        <div id="blockUserInfo"></div>
+
+        <div class="form-group">
+            <label>Причина:</label>
+            <textarea id="blockReason" rows="3" placeholder="Введите причину..."></textarea>
+        </div>
+
+        <div class="form-group">
+            <label>Тип блокировки:</label>
+            <div>
+                <label><input type="radio" name="blockType" value="temporary" checked> Временная</label>
+                <label><input type="radio" name="blockType" value="permanent"> Постоянная</label>
+            </div>
+        </div>
+
+        <div class="form-group" id="durationGroup">
+            <label>Дней:</label>
+            <input type="number" id="blockDays" value="1" min="1" max="365">
+        </div>
+
+        <div class="modal-actions">
+            <button onclick="hideBlockModal()">Отмена</button>
+            <button onclick="confirmBlock()" style="background: #dc3545; color: white;">Заблокировать</button>
+        </div>
+    </div>
+</div>
+
 <script>
+    // ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ
+    let currentBlockingUserId = null;
+
+    // ФУНКЦИИ
     function logout() {
-        console.log("Выход администратора...");
-        fetch('/api/logout', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-            }
-        })
-            .then(response => {
-                console.log("Ответ на выход:", response.status);
-                window.location.href = '/';
-            })
-            .catch(error => {
-                console.error('Ошибка выхода:', error);
-                window.location.href = '/';
-            });
+        if (confirm('Выйти?')) {
+            fetch('/api/logout', { method: 'POST' })
+                .then(() => window.location.href = '/');
+        }
     }
 
+    async function loadUsers() {
+        console.log("🔄 Загрузка пользователей...");
+
+        try {
+            const response = await fetch('/api/admin/users');
+
+            if (response.status === 403) {
+                alert('❌ Доступ запрещен! Вы не администратор.');
+                window.location.href = '/';
+                return;
+            }
+
+            if (!response.ok) {
+                throw new Error('Ошибка загрузки');
+            }
+
+            const users = await response.json();
+            console.log("✅ Получено пользователей:", users.length);
+            displayUsers(users);
+
+        } catch (error) {
+            console.error('❌ Ошибка:', error);
+            document.getElementById('usersList').innerHTML =
+                '<div class="no-data">❌ Ошибка загрузки: ' + error.message + '</div>';
+        }
+    }
+
+    function displayUsers(users) {
+        const container = document.getElementById('usersList');
+
+        if (!users || users.length === 0) {
+            container.innerHTML = '<div class="no-data">Пользователей нет</div>';
+            return;
+        }
+
+        container.innerHTML = users.map(user => {
+            const isBlocked = user.blocked || user.isBlocked;
+            const blockedText = user.blockedUntil ?
+                ` до ${new Date(user.blockedUntil).toLocaleDateString('ru-RU')}` : '';
+
+            return `
+        <div class="user-item">
+            <div style="font-weight: bold;">${user.username}</div>
+            <div style="font-size: 0.9em; color: #666;">
+                ID: ${user.id} | Email: ${user.email || 'нет'}
+            </div>
+            <div style="margin-top: 5px;">
+                <span style="background: ${isBlocked ? '#f8d7da' : '#d4edda'};
+                             color: ${isBlocked ? '#721c24' : '#155724'};
+                             padding: 2px 8px; border-radius: 10px; font-size: 0.8em;">
+                    ${isBlocked ? `🔒 Заблокирован${blockedText}` : '✅ Активен'}
+                </span>
+            </div>
+            <div class="user-actions">
+                ${!isBlocked ?
+                `<button class="block-btn" onclick="showBlockModal(${user.id}, '${user.username}')">
+                        Заблокировать
+                    </button>` :
+                `<button class="unblock-btn" onclick="unblockUser(${user.id}, '${user.username}')">
+                        Разблокировать
+                    </button>`
+            }
+            </div>
+        </div>
+        `;
+        }).join('');
+    }
+
+    function showBlockModal(userId, username) {
+        currentBlockingUserId = userId;
+
+        document.getElementById('blockUserInfo').innerHTML = `
+        <p><strong>Пользователь:</strong> ${username}</p>
+        <p><strong>ID:</strong> ${userId}</p>
+    `;
+
+        document.getElementById('blockReason').value = '';
+        document.getElementById('blockDays').value = '1';
+        document.querySelector('input[name="blockType"][value="temporary"]').checked = true;
+
+        // Показываем модальное окно
+        document.getElementById('blockModal').classList.remove('hidden');
+    }
+
+    function hideBlockModal() {
+        document.getElementById('blockModal').classList.add('hidden');
+        currentBlockingUserId = null;
+    }
+
+    async function confirmBlock() {
+        if (!currentBlockingUserId) return;
+
+        const blockType = document.querySelector('input[name="blockType"]:checked').value;
+        const reason = document.getElementById('blockReason').value;
+        const days = document.getElementById('blockDays').value;
+
+        if (!reason.trim()) {
+            alert('Введите причину блокировки');
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('type', blockType);
+        formData.append('reason', reason);
+        if (blockType === 'temporary') {
+            formData.append('days', days);
+        }
+
+        try {
+            const response = await fetch(`/api/admin/users/${currentBlockingUserId}/block`, {
+                method: 'POST',
+                body: formData
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                alert('✅ Пользователь заблокирован');
+                hideBlockModal();
+                loadUsers(); // Перезагружаем список
+            } else {
+                alert('❌ Ошибка: ' + (data.message || 'Неизвестная ошибка'));
+            }
+        } catch (error) {
+            console.error('Ошибка блокировки:', error);
+            alert('❌ Ошибка сети');
+        }
+    }
+
+    async function unblockUser(userId, username) {
+        if (!confirm(`Разблокировать пользователя ${username}?`)) return;
+
+        try {
+            const response = await fetch(`/api/admin/users/${userId}/unblock`, {
+                method: 'POST'
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                alert('✅ Пользователь разблокирован');
+                loadUsers();
+            } else {
+                alert('❌ Ошибка разблокировки');
+            }
+        } catch (error) {
+            console.error('Ошибка разблокировки:', error);
+            alert('❌ Ошибка сети');
+        }
+    }
+
+    // Обработчик изменения типа блокировки
     document.addEventListener('DOMContentLoaded', function() {
-        console.log("Admin page loaded");
+        // Показать/скрыть поле для дней
+        document.querySelectorAll('input[name="blockType"]').forEach(radio => {
+            radio.addEventListener('change', function() {
+                document.getElementById('durationGroup').style.display =
+                    this.value === 'temporary' ? 'block' : 'none';
+            });
+        });
+
+        // Закрытие модального окна
+        document.getElementById('blockModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                hideBlockModal();
+            }
+        });
+
+        // Поиск
+        document.getElementById('searchUsers').addEventListener('input', function(e) {
+            // Простой поиск на клиенте
+            const searchTerm = e.target.value.toLowerCase();
+            const userItems = document.querySelectorAll('.user-item');
+
+            userItems.forEach(item => {
+                const text = item.textContent.toLowerCase();
+                item.style.display = text.includes(searchTerm) ? 'block' : 'none';
+            });
+        });
+
+        // Загружаем пользователей при загрузке страницы
+        setTimeout(loadUsers, 100);
     });
+
+    async function confirmBlock() {
+        if (!currentBlockingUserId) return;
+
+        const blockType = document.querySelector('input[name="blockType"]:checked').value;
+        const reason = document.getElementById('blockReason').value;
+        const days = document.getElementById('blockDays').value;
+
+        console.log("🛠 Данные блокировки:", {
+            userId: currentBlockingUserId,
+            type: blockType,
+            reason: reason,
+            days: days
+        });
+
+        if (!reason.trim()) {
+            alert('Введите причину блокировки');
+            return;
+        }
+
+        // Используем URL encoded form data
+        const params = new URLSearchParams();
+        params.append('type', blockType);
+        params.append('reason', reason);
+        if (blockType === 'temporary') {
+            params.append('days', days);
+        }
+
+        console.log("📤 Отправка запроса с параметрами:", params.toString());
+
+        try {
+            const response = await fetch(`/api/admin/users/${currentBlockingUserId}/block`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: params.toString()
+            });
+
+            console.log("📥 Ответ сервера:", response.status, response.statusText);
+
+            const data = await response.json();
+            console.log("📨 Данные ответа:", data);
+
+            if (data.success) {
+                alert('✅ Пользователь заблокирован');
+                hideBlockModal();
+                loadUsers(); // Перезагружаем список
+            } else {
+                alert('❌ Ошибка: ' + (data.message || 'Неизвестная ошибка'));
+            }
+        } catch (error) {
+            console.error('❌ Ошибка сети:', error);
+            alert('❌ Ошибка сети: ' + error.message);
+        }
+    }
+
 </script>
 </body>
 </html>

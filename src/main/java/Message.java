@@ -9,6 +9,11 @@ public class Message {
     private boolean isDeleted;
     private LocalDateTime createdAt;
     private User sender;
+    private boolean hasFile;
+    private String fileName;
+    private String fileType;
+    private String fileUrl;
+    private long fileSize;
 
     // Конструкторы
     public Message() {
@@ -61,7 +66,13 @@ public class Message {
 
     // Бизнес-логика
     public String getDisplayContent() {
-        return isDeleted ? "Сообщение удалено" : content;
+        if (isDeleted) {
+            return "Сообщение удалено";
+        }
+        if (hasFile) {
+            return "📎 Файл: " + fileName;
+        }
+        return content;
     }
 
     public boolean canDelete(int userId) {
@@ -71,6 +82,23 @@ public class Message {
     public boolean canReport(int userId) {
         return senderId != userId && !isDeleted;
     }
+
+    public boolean isHasFile() { return hasFile; }
+    public void setHasFile(boolean hasFile) { this.hasFile = hasFile; }
+
+    public String getFileName() { return fileName; }
+    public void setFileName(String fileName) { this.fileName = fileName; }
+
+    public String getFileType() { return fileType; }
+    public void setFileType(String fileType) { this.fileType = fileType; }
+
+    public String getFileUrl() { return fileUrl; }
+    public void setFileUrl(String fileUrl) { this.fileUrl = fileUrl; }
+
+    public long getFileSize() { return fileSize; }
+    public void setFileSize(long fileSize) { this.fileSize = fileSize; }
+
+
 
     // Builder
     public static Builder builder() {

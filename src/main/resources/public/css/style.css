@@ -807,3 +807,309 @@ body {
 .message-action:hover {
     opacity: 1;
 }
+
+.file-upload-container {
+    display: flex;
+    align-items: center;
+}
+
+.file-upload-btn {
+    cursor: pointer;
+    padding: 0.5rem;
+    font-size: 1.2rem;
+    background: none;
+    border: none;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #666;
+}
+
+.file-upload-btn:hover {
+    background: #f0f0f0;
+    color: #333;
+}
+
+.selected-file-info {
+    display: flex;
+    align-items: center;
+    background: #f8f9fa;
+    padding: 0.5rem 1rem;
+    border-radius: 20px;
+    margin: 0.5rem 0;
+    border: 1px solid #dee2e6;
+    justify-content: space-between;
+}
+
+.message-file {
+    margin-top: 0.5rem;
+    padding: 0.75rem;
+    background: white;
+    border: 1px solid #dee2e6;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    max-width: 400px;
+}
+
+.message-item.own .message-file {
+    background: #e3f2fd;
+    border-color: #bbdefb;
+}
+
+.file-icon {
+    font-size: 1.5rem;
+    flex-shrink: 0;
+}
+
+.file-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.file-name {
+    font-weight: bold;
+    word-break: break-all;
+    font-size: 0.9rem;
+    margin-bottom: 0.25rem;
+}
+
+.file-size {
+    font-size: 0.8rem;
+    color: #666;
+}
+
+.download-btn {
+    background: #28a745;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    padding: 0.5rem;
+    cursor: pointer;
+    text-decoration: none;
+    font-size: 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    flex-shrink: 0;
+}
+
+.download-btn:hover {
+    background: #218838;
+}
+
+.message-file.image-file {
+    background: none;
+    border: none;
+    padding: 0;
+    max-width: 300px;
+}
+
+.message-file.image-file img {
+    max-width: 100%;
+    max-height: 300px;
+    border-radius: 10px;
+    cursor: pointer;
+    border: 3px solid white;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+}
+
+.image-modal {
+    background: rgba(0, 0, 0, 0.9);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.image-modal .modal-content {
+    background: transparent;
+    border: none;
+    padding: 0;
+    max-width: none;
+}
+
+.image-modal img {
+    max-width: 90vw;
+    max-height: 90vh;
+    border-radius: 10px;
+}
+
+.image-modal button {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    background: rgba(255, 255, 255, 0.9);
+    border: none;
+    border-radius: 50%;
+    width: 50px;
+    height: 50px;
+    font-size: 1.5rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.image-modal button:hover {
+    background: white;
+}
+
+/* Для аудио файлов */
+.audio-player {
+    width: 100%;
+    margin-top: 0.5rem;
+}
+
+/* Для видео файлов */
+.video-player {
+    width: 100%;
+    max-width: 400px;
+    border-radius: 10px;
+    margin-top: 0.5rem;
+}
+
+/* Адаптивность для мобильных устройств */
+@media (max-width: 768px) {
+    .message-file {
+        max-width: 250px;
+    }
+
+    .message-file.image-file {
+        max-width: 200px;
+    }
+
+    .image-modal img {
+        max-width: 95vw;
+        max-height: 80vh;
+    }
+}
+
+/* Стили для админ-панели */
+.user-status {
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: bold;
+}
+
+.user-status.active {
+    background-color: #d4edda;
+    color: #155724;
+}
+
+.user-status.blocked {
+    background-color: #f8d7da;
+    color: #721c24;
+}
+
+.user-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.btn-small {
+    padding: 5px 10px;
+    font-size: 12px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: opacity 0.2s;
+}
+
+.btn-small:hover {
+    opacity: 0.9;
+}
+
+.block-user-btn {
+    background-color: #dc3545;
+    color: white;
+}
+
+.unblock-user-btn {
+    background-color: #28a745;
+    color: white;
+}
+
+/* Модальное окно */
+.modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.modal.hidden {
+    display: none;
+}
+
+.modal-content {
+    background: white;
+    padding: 20px;
+    border-radius: 8px;
+    width: 500px;
+    max-width: 90%;
+}
+
+.user-info-block {
+    background: #f8f9fa;
+    padding: 15px;
+    border-radius: 6px;
+    margin-bottom: 15px;
+    border: 1px solid #dee2e6;
+}
+
+/* Добавьте в style.css */
+.user-status.blocked {
+    background-color: #f8d7da;
+    color: #721c24;
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: bold;
+}
+
+.user-status.active {
+    background-color: #d4edda;
+    color: #155724;
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: bold;
+}
+
+.user-actions {
+    margin-top: 10px;
+}
+
+.btn-small.block-user-btn {
+    background-color: #dc3545;
+    color: white;
+    border: none;
+    padding: 5px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+}
+
+.btn-small.unblock-user-btn {
+    background-color: #28a745;
+    color: white;
+    border: none;
+    padding: 5px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+}

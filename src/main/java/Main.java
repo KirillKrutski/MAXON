@@ -35,6 +35,7 @@ public class Main {
         AuthController.setupRoutes(app);
         ChatController.setupRoutes(app);
         MessageController.setupRoutes(app);
+        AdminController.setupRoutes(app);
 
         // HTML маршруты
         app.get("/", ctx -> {

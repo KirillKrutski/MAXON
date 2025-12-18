@@ -176,5 +176,6 @@ public class AuthController {
             ctx.req().getSession().invalidate();
             ctx.redirect("/");
         });
+
     }
 }

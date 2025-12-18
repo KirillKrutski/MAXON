@@ -32,15 +32,34 @@ public class DatabaseService {
 
     // Методы для работы с пользователями
     public static User authenticateUser(String username, String password) {
-        String sql = "SELECT * FROM users WHERE username = ? AND (is_blocked = false OR blocked_until < NOW())";
+        String sql = "SELECT * FROM users WHERE username = ?";
         try (Connection conn = getConnection(); PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setString(1, username);
             ResultSet rs = stmt.executeQuery();
+
             if (rs.next()) {
+                // Проверяем пароль
                 String storedHash = rs.getString("password");
-                // ПРОВЕРЯЕМ ПАРОЛЬ С ИСПОЛЬЗОВАНИЕМ BCrypt
                 if (bcryptVerifyer.verify(password.toCharArray(), storedHash.toCharArray()).verified) {
-                    return mapUser(rs);
+                    User user = mapUser(rs);
+
+                    // Проверяем, не заблокирован ли пользователь
+                    if (user.isCurrentlyBlocked()) {
+                        System.out.println("🚫 Заблокированный пользователь пытается войти: " + username);
+
+                        // Проверяем, не истекла ли временная блокировка
+                        if (user.getBlockedUntil() != null &&
+                                user.getBlockedUntil().isBefore(java.time.LocalDateTime.now())) {
+                            // Блокировка истекла - разблокируем
+                            unblockUser(user.getId());
+                            System.out.println("✅ Временная блокировка истекла, пользователь разблокирован");
+                            return user;
+                        }
+
+                        return null; // Пользователь заблокирован
+                    }
+
+                    return user;
                 }
             }
         } catch (SQLException e) {
@@ -292,6 +311,33 @@ public class DatabaseService {
         }
     }
 
+    public static boolean sendMessageWithFile(int chatId, int senderId, String content,
+                                              String fileName, String fileType,
+                                              String fileUrl, long fileSize) {
+        String sql = "INSERT INTO messages (chat_id, sender_id, content, has_file, file_name, file_type, file_url, file_size) " +
+                "VALUES (?, ?, ?, true, ?, ?, ?, ?)";
+
+        try (Connection conn = getConnection(); PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setInt(1, chatId);
+            stmt.setInt(2, senderId);
+            stmt.setString(3, content);
+            stmt.setString(4, fileName);
+            stmt.setString(5, fileType);
+            stmt.setString(6, fileUrl);
+            stmt.setLong(7, fileSize);
+
+            boolean success = stmt.executeUpdate() > 0;
+            if (success) {
+                System.out.println("📎 Сообщение с файлом отправлено в чат " + chatId);
+            }
+            return success;
+        } catch (SQLException e) {
+            System.out.println("❌ Ошибка отправки сообщения с файлом: " + e.getMessage());
+            e.printStackTrace();
+            return false;
+        }
+    }
+
     // Метод для получения сообщений чата
     public static List<Message> getChatMessages(int chatId) {
         List<Message> messages = new ArrayList<>();
@@ -514,14 +560,23 @@ public class DatabaseService {
     public static List<User> getAllUsers() {
         List<User> users = new ArrayList<>();
         String sql = "SELECT * FROM users WHERE role = 'USER' ORDER BY username";
-        try (Connection conn = getConnection(); PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+        try (Connection conn = getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+
             ResultSet rs = stmt.executeQuery();
             while (rs.next()) {
-                users.add(mapUser(rs));
+                User user = mapUser(rs);
+                users.add(user);
             }
+
+            System.out.println("✅ [DatabaseService] getAllUsers() вернул " + users.size() + " пользователей");
+
         } catch (SQLException e) {
+            System.out.println("❌ Ошибка получения пользователей: " + e.getMessage());
             e.printStackTrace();
         }
+
         return users;
     }
 
@@ -529,9 +584,15 @@ public class DatabaseService {
         String sql = "UPDATE users SET is_blocked = false, blocked_until = NULL WHERE id = ?";
         try (Connection conn = getConnection(); PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setInt(1, userId);
-            return stmt.executeUpdate() > 0;
+            boolean success = stmt.executeUpdate() > 0;
+
+            if (success) {
+                System.out.println("✅ Пользователь ID " + userId + " разблокирован");
+            }
+
+            return success;
         } catch (SQLException e) {
-            e.printStackTrace();
+            System.out.println("❌ Ошибка разблокировки пользователя: " + e.getMessage());
             return false;
         }
     }
@@ -554,6 +615,8 @@ public class DatabaseService {
         if (lastSeen != null) {
             user.setLastSeen(lastSeen.toLocalDateTime());
         }
+
+        user.setOnline(rs.getBoolean("is_online"));
 
         Timestamp blockedUntil = rs.getTimestamp("blocked_until");
         if (blockedUntil != null) {
@@ -591,6 +654,15 @@ public class DatabaseService {
         message.setSenderName(rs.getString("sender_name"));
         message.setContent(rs.getString("content"));
         message.setDeleted(rs.getBoolean("is_deleted"));
+
+        // Добавить поля файла
+        message.setHasFile(rs.getBoolean("has_file"));
+        if (message.isHasFile()) {
+            message.setFileName(rs.getString("file_name"));
+            message.setFileType(rs.getString("file_type"));
+            message.setFileUrl(rs.getString("file_url"));
+            message.setFileSize(rs.getLong("file_size"));
+        }
 
         Timestamp createdAt = rs.getTimestamp("created_at");
         if (createdAt != null) {
@@ -764,10 +836,13 @@ public class DatabaseService {
         }
     }
 
-    private static String getFileExtension(String filename) {
-        if (filename == null) return ".jpg";
+    // Метод для получения расширения файла (уже должен быть, но на всякий случай)
+    public static String getFileExtension(String filename) {
+        if (filename == null || filename.isEmpty()) {
+            return "";
+        }
         int lastDot = filename.lastIndexOf(".");
-        return lastDot > 0 ? filename.substring(lastDot) : ".jpg";
+        return lastDot > 0 ? filename.substring(lastDot) : "";
     }
 
 
@@ -892,7 +967,141 @@ public class DatabaseService {
             return false;
         }
     }
+    // Метод для получения всех пользователей для админ-панели
+    public static List<User> getAllUsersForAdmin() {
+        System.out.println("🟡 [DatabaseService] getAllUsersForAdmin() вызван");
+
+        List<User> users = new ArrayList<>();
+        String sql = "SELECT * FROM users WHERE role = 'USER' ORDER BY username";
+
+        try (Connection conn = getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            ResultSet rs = stmt.executeQuery();
+            int count = 0;
+
+            while (rs.next()) {
+                count++;
+                User user = mapUser(rs); // Используйте существующий метод mapUser
+
+                System.out.println("   Найден пользователь " + count + ": " +
+                        user.getUsername() + " (ID: " + user.getId() + ")");
+
+                users.add(user);
+            }
+
+            System.out.println("✅ Всего найдено: " + count + " пользователей");
+
+        } catch (SQLException e) {
+            System.out.println("❌ Ошибка SQL: " + e.getMessage());
+            e.printStackTrace();
+        }
+
+        return users;
+    }
+
+    // Метод для блокировки пользователя
+    public static boolean blockUser(int userId, String type, String reason, String daysParam, int adminId) {
+        Connection conn = null;
+        try {
+            conn = getConnection();
+            conn.setAutoCommit(false);
+
+            System.out.println("🛠 Блокировка пользователя ID: " + userId +
+                    ", тип: " + type +
+                    ", причина: " + reason);
+
+            String sql;
+            int days = 0;
+
+            if ("permanent".equals(type)) {
+                sql = "UPDATE users SET is_blocked = true, blocked_until = NULL WHERE id = ?";
+            } else {
+                days = (daysParam != null && !daysParam.isEmpty()) ? Integer.parseInt(daysParam) : 1;
+                sql = "UPDATE users SET is_blocked = true, blocked_until = CURRENT_TIMESTAMP + INTERVAL '" + days + " days' WHERE id = ?";
+                System.out.println("📅 Блокировка на " + days + " дней");
+            }
+
+            PreparedStatement stmt = conn.prepareStatement(sql);
+            stmt.setInt(1, userId);
+            int affectedRows = stmt.executeUpdate();
+
+            boolean success = affectedRows > 0;
+
+            if (success) {
+                // Логируем действие
+                String details = "permanent".equals(type) ?
+                        "Постоянная блокировка" :
+                        "Временная блокировка на " + days + " дней";
+
+                logAdminAction(adminId, userId, "BLOCK", reason, details);
+
+                System.out.println("✅ Пользователь ID " + userId + " успешно заблокирован");
+            } else {
+                System.out.println("❌ Пользователь ID " + userId + " не найден");
+            }
+
+            conn.commit();
+            return success;
+
+        } catch (SQLException e) {
+            System.out.println("❌ SQL ошибка блокировки: " + e.getMessage());
+            e.printStackTrace();
+            if (conn != null) {
+                try {
+                    conn.rollback();
+                } catch (SQLException ex) {
+                    System.out.println("❌ Ошибка отката: " + ex.getMessage());
+                }
+            }
+            return false;
+        } catch (NumberFormatException e) {
+            System.out.println("❌ Ошибка парсинга дней: " + e.getMessage());
+            return false;
+        } finally {
+            if (conn != null) {
+                try {
+                    conn.setAutoCommit(true);
+                    conn.close();
+                } catch (SQLException e) {
+                    System.out.println("❌ Ошибка закрытия соединения: " + e.getMessage());
+                }
+            }
+        }
+    }
 
 
+
+    // Логирование действий администратора
+    private static void logAdminAction(int adminId, int targetUserId, String action, String reason, String details) {
+        String sql = "INSERT INTO admin_logs (admin_id, target_user_id, action, reason, details, created_at) " +
+                "VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)";
+
+        try (Connection conn = getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            stmt.setInt(1, adminId);
+            stmt.setInt(2, targetUserId);
+            stmt.setString(3, action);
+            stmt.setString(4, reason);
+            stmt.setString(5, details);
+
+            stmt.executeUpdate();
+
+            System.out.println("📝 Логирование: " + action + " пользователя " + targetUserId);
+
+        } catch (SQLException e) {
+            System.out.println("❌ Ошибка логирования: " + e.getMessage());
+        }
+    }
+
+    // Инвалидация сессий пользователя (симуляция)
+    private static void invalidateUserSessions(int userId) {
+        System.out.println("🚫 Инвалидация сессий для пользователя ID: " + userId);
+        // В реальном приложении здесь можно:
+        // 1. Удалить сессию из хранилища
+        // 2. Отправить WebSocket сообщение о блокировке
+        // 3. Записать в лог для последующей очистки
+    }
 
 }
