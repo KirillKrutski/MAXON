@@ -53,6 +53,7 @@
             width: 100%;
             height: 100%;
         }
+
         .file-upload-container {
             display: flex;
             align-items: center;
@@ -240,7 +241,6 @@
             color: #666;
         }
 
-        /* Добавьте в стили chat.html */
         .message-item {
             margin: 10px 0;
             padding: 8px 12px;
@@ -313,7 +313,6 @@
                     <button onclick="showChangePasswordModal()" class="btn-secondary" title="Сменить пароль">🔑</button>
                     <button onclick="logout()" class="btn-secondary">🚪 Выйти</button>
                 </div>
-
             </div>
         </div>
 
@@ -413,774 +412,7 @@
     </div>
 </div>
 
-<script>
-    let currentUser = null;
-    let currentChat = null;
-    let messagePollingInterval = null;
-
-    // ==================== ИНИЦИАЛИЗАЦИЯ ====================
-    document.addEventListener('DOMContentLoaded', function() {
-        console.log("🚀 Инициализация чата...");
-        loadUser();
-    });
-
-    // Загрузка информации о текущем пользователе
-
-    // Загрузка информации о текущем пользователе
-    async function loadUser() {
-        try {
-            const response = await fetch('/api/user/current');
-            if (response.ok) {
-                currentUser = await response.json();
-                console.log("✅ Пользователь загружен:", currentUser.username, "Статус:", currentUser.online ? "онлайн" : "оффлайн");
-
-                // Обновляем статус сразу после загрузки
-                updateUserStatus();
-
-                // Отмечаем пользователя онлайн
-                await fetch('/api/user/ping', { method: 'POST' });
-
-                loadFriendRequests();
-                loadContacts();
-
-                // Запускаем периодическое обновление статуса
-                setInterval(updateUserStatus, 30000);
-            } else {
-                console.error("❌ Пользователь не авторизован");
-                window.location.href = '/';
-            }
-        } catch (error) {
-            console.error('❌ Ошибка загрузки пользователя:', error);
-            window.location.href = '/';
-        }
-    }
-
-    // Обновление статуса текущего пользователя
-    // Обновление статуса текущего пользователя
-    async function updateUserStatus() {
-        try {
-            // Обновляем данные пользователя с сервера
-            const response = await fetch('/api/user/current');
-            if (response.ok) {
-                const updatedUser = await response.json();
-                currentUser = updatedUser;
-
-                const statusElement = document.getElementById('userStatus');
-                if (statusElement) {
-                    if (currentUser.online) {
-                        statusElement.textContent = '🟢 В сети';
-                        statusElement.className = 'status-online';
-                    } else {
-                        const lastSeenText = formatLastSeen(currentUser.lastSeen);
-                        statusElement.textContent = `⚫ Был(а) ${lastSeenText}`;
-                        statusElement.className = 'status-offline';
-                    }
-                }
-            }
-        } catch (error) {
-            console.error('❌ Ошибка обновления статуса:', error);
-        }
-    }
-
-    // ==================== СМЕНА ПАРОЛЯ ====================
-    // Показать модальное окно смены пароля
-    function showChangePasswordModal() {
-        document.getElementById('changePasswordModal').classList.remove('hidden');
-        // Очищаем поля и сообщения
-        document.getElementById('currentPassword').value = '';
-        document.getElementById('newPassword').value = '';
-        document.getElementById('confirmNewPassword').value = '';
-        document.getElementById('changePasswordMessage').textContent = '';
-    }
-
-    // Скрыть модальное окно смены пароля
-    function hideChangePasswordModal() {
-        document.getElementById('changePasswordModal').classList.add('hidden');
-    }
-
-    // Смена пароля
-    async function changePassword() {
-        const currentPassword = document.getElementById('currentPassword').value;
-        const newPassword = document.getElementById('newPassword').value;
-        const confirmNewPassword = document.getElementById('confirmNewPassword').value;
-        const messageElement = document.getElementById('changePasswordMessage');
-        const changeBtn = document.querySelector('#changePasswordModal .btn-primary');
-
-        // Валидация
-        if (!currentPassword || !newPassword || !confirmNewPassword) {
-            showChangePasswordMessage('Заполните все поля', 'error');
-            return;
-        }
-
-        if (newPassword.length < 3) {
-            showChangePasswordMessage('Новый пароль должен содержать минимум 3 символа', 'error');
-            return;
-        }
-
-        if (newPassword !== confirmNewPassword) {
-            showChangePasswordMessage('Новые пароли не совпадают', 'error');
-            return;
-        }
-
-        // Показываем загрузку
-        changeBtn.textContent = 'Смена...';
-        changeBtn.disabled = true;
-
-        try {
-            console.log("🔄 Смена пароля...");
-
-            const response = await fetch('/api/change-password', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                },
-                body: `currentPassword=${encodeURIComponent(currentPassword)}&newPassword=${encodeURIComponent(newPassword)}`
-            });
-
-            const data = await response.json();
-            console.log("📨 Ответ смены пароля:", data);
-
-            if (data.success) {
-                showChangePasswordMessage('Пароль успешно изменен!', 'success');
-                // Закрываем окно через 2 секунды
-                setTimeout(() => {
-                    hideChangePasswordModal();
-                }, 2000);
-            } else {
-                showChangePasswordMessage(data.message || 'Ошибка смены пароля', 'error');
-            }
-        } catch (error) {
-            console.error('💥 Ошибка смены пароля:', error);
-            showChangePasswordMessage('Ошибка соединения с сервером', 'error');
-        } finally {
-            // Восстанавливаем кнопку
-            changeBtn.textContent = 'Сменить пароль';
-            changeBtn.disabled = false;
-        }
-    }
-
-    // Показать сообщение в модальном окне
-    function showChangePasswordMessage(message, type) {
-        const element = document.getElementById('changePasswordMessage');
-        element.textContent = message;
-        element.className = `message ${type}`;
-    }
-
-    // ==================== ПОИСК ПОЛЬЗОВАТЕЛЕЙ ====================
-    async function searchUsers(query) {
-        const resultsContainer = document.getElementById('searchResults');
-
-        if (!query || query.trim().length < 2) {
-            resultsContainer.innerHTML = '';
-            return;
-        }
-
-        console.log("🔍 Поиск пользователей:", query);
-
-        try {
-            const response = await fetch(`/api/users/search?q=${encodeURIComponent(query)}`);
-            if (!response.ok) {
-                throw new Error('Ошибка поиска');
-            }
-
-            const users = await response.json();
-            console.log("📋 Найдено пользователей:", users.length);
-            displaySearchResults(users);
-        } catch (error) {
-            console.error('❌ Ошибка поиска:', error);
-            resultsContainer.innerHTML = '<div class="no-results">❌ Ошибка поиска</div>';
-        }
-    }
-
-    // Отображение результатов поиска
-    function displaySearchResults(users) {
-        const container = document.getElementById('searchResults');
-
-        if (users.length === 0) {
-            container.innerHTML = '<div class="no-results">👤 Пользователи не найдены</div>';
-            return;
-        }
-
-        container.innerHTML = users.map(user => `
-                <div class="search-result-item">
-                    <div class="user-info">
-                        <strong>👤 ${user.username}</strong>
-                        <span class="user-id">ID: ${user.id}</span>
-                    </div>
-                    <button class="btn-small send-request-btn"
-                            onclick="sendFriendRequest(${user.id})"
-                            title="Отправить запрос в друзья">
-                        📨 Добавить
-                    </button>
-                </div>
-            `).join('');
-    }
-
-    // ==================== ЗАПРОСЫ В ДРУЗЬЯ ====================
-    // Отправка запроса в друзья
-    async function sendFriendRequest(toUserId) {
-        if (!currentUser) {
-            alert('❌ Вы не авторизованы');
-            return;
-        }
-
-        console.log("🔄 Отправка запроса пользователю ID:", toUserId);
-
-        try {
-            const response = await fetch('/api/friend-request', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                },
-                body: `toUserId=${toUserId}`
-            });
-
-            const data = await response.json();
-            console.log("📨 Ответ сервера:", data);
-
-            if (data.success) {
-                alert('✅ Запрос отправлен!');
-                // Очищаем результаты поиска
-                document.getElementById('searchResults').innerHTML = '';
-                document.getElementById('userSearch').value = '';
-            } else {
-                alert('❌ ' + data.message);
-            }
-        } catch (error) {
-            console.error('💥 Ошибка отправки запроса:', error);
-            alert('💥 Ошибка соединения с сервером');
-        }
-    }
-
-    // Загрузка входящих запросов
-    async function loadFriendRequests() {
-        try {
-            const response = await fetch('/api/friend-requests/incoming');
-            if (!response.ok) {
-                throw new Error('Ошибка загрузки запросов');
-            }
-
-            const requests = await response.json();
-            console.log("📨 Загружено запросов:", requests.length);
-            displayFriendRequests(requests);
-        } catch (error) {
-            console.error('❌ Ошибка загрузки запросов:', error);
-        }
-    }
-
-    // Отображение входящих запросов
-    function displayFriendRequests(requests) {
-        const container = document.getElementById('friendRequests');
-
-        if (requests.length === 0) {
-            container.innerHTML = '<div class="no-requests">📭 Запросов нет</div>';
-            return;
-        }
-
-        container.innerHTML = requests.map(request => `
-                <div class="friend-request-item">
-                    <div class="request-info">
-                        <strong>👤 ${request.fromUsername}</strong>
-                        <span>хочет добавить вас в контакты</span>
-                    </div>
-                    <div class="request-actions">
-                        <button class="btn-small accept-btn"
-                                onclick="acceptFriendRequest(${request.id})"
-                                title="Принять запрос">
-                            ✅ Принять
-                        </button>
-                        <button class="btn-small reject-btn"
-                                onclick="rejectFriendRequest(${request.id})"
-                                title="Отклонить запрос">
-                            ❌ Отклонить
-                        </button>
-                    </div>
-                </div>
-            `).join('');
-    }
-
-    // Принятие запроса
-    async function acceptFriendRequest(requestId) {
-        console.log("✅ Принятие запроса ID:", requestId);
-
-        try {
-            const response = await fetch(`/api/friend-requests/${requestId}/accept`, {
-                method: 'POST'
-            });
-
-            const data = await response.json();
-
-            if (data.success) {
-                alert('✅ Запрос принят! Пользователь добавлен в контакты');
-                // Обновляем интерфейс
-                loadFriendRequests();
-                loadContacts();
-            } else {
-                alert('❌ Ошибка принятия запроса: ' + data.message);
-            }
-        } catch (error) {
-            console.error('💥 Ошибка принятия запроса:', error);
-            alert('💥 Ошибка соединения с сервером');
-        }
-    }
-
-    // Отклонение запроса
-    async function rejectFriendRequest(requestId) {
-        console.log("❌ Отклонение запроса ID:", requestId);
-
-        if (!confirm('Вы уверены, что хотите отклонить запрос?')) {
-            return;
-        }
-
-        try {
-            const response = await fetch(`/api/friend-requests/${requestId}/reject`, {
-                method: 'POST'
-            });
-
-            const data = await response.json();
-
-            if (data.success) {
-                alert('✅ Запрос отклонен');
-                loadFriendRequests();
-            } else {
-                alert('❌ Ошибка отклонения запроса');
-            }
-        } catch (error) {
-            console.error('💥 Ошибка отклонения запроса:', error);
-            alert('💥 Ошибка соединения с сервером');
-        }
-    }
-
-    // ==================== КОНТАКТЫ ====================
-    // Загрузка контактов
-    async function loadContacts() {
-        try {
-            const response = await fetch('/api/contacts');
-            if (!response.ok) {
-                throw new Error('Ошибка загрузки контактов');
-            }
-
-            const contacts = await response.json();
-            console.log("📞 Загружено контактов:", contacts.length);
-            displayContacts(contacts);
-        } catch (error) {
-            console.error('❌ Ошибка загрузки контактов:', error);
-        }
-    }
-
-    // Отображение контактов
-    // Отображение контактов
-    function displayContacts(contacts) {
-        const container = document.getElementById('contactsList');
-
-        if (contacts.length === 0) {
-            container.innerHTML = '<div class="no-contacts">👥 Контактов пока нет</div>';
-            return;
-        }
-
-        container.innerHTML = contacts.map(contact => {
-            // Используем isOnline вместо online
-            const isOnline = contact.online || contact.isOnline;
-            const status = isOnline ? '🟢 В сети' : `⚫ Был(а) ${formatLastSeen(contact.lastSeen)}`;
-            const statusClass = isOnline ? 'status-online' : 'status-offline';
-
-            return `
-            <div class="contact-item" data-user-id="${contact.id}">
-                <div class="contact-avatar">
-                    <img src="${contact.profileImageUrl || '/images/default-avatar.png'}"
-                         class="avatar avatar-small" alt="${contact.username}">
-                </div>
-                <div class="contact-info">
-                    <div class="contact-name">${contact.username}</div>
-                    <div class="contact-status ${statusClass}">${status}</div>
-                </div>
-                <button class="btn-small start-chat-btn"
-                        onclick="startChat(${contact.id}, '${contact.username}')"
-                        title="Начать чат">
-                    💬 Чат
-                </button>
-            </div>
-        `;
-        }).join('');
-    }
-
-    // Форматирование времени последней активности
-    function formatLastSeen(lastSeen) {
-        if (!lastSeen) return 'давно';
-
-        try {
-            const lastSeenDate = new Date(lastSeen);
-            const now = new Date();
-            const diffMs = now - lastSeenDate;
-            const diffMinutes = Math.floor(diffMs / (1000 * 60));
-            const diffSeconds = Math.floor(diffMs / 1000);
-
-            if (diffSeconds < 30) return 'только что';
-            if (diffMinutes < 1) return 'менее минуты назад';
-            if (diffMinutes < 60) return `${diffMinutes} мин назад`;
-            if (diffMinutes < 1440) return `${Math.floor(diffMinutes / 60)} ч назад`;
-
-            return lastSeenDate.toLocaleDateString('ru-RU', {
-                day: 'numeric',
-                month: 'short',
-                hour: '2-digit',
-                minute: '2-digit'
-            });
-        } catch (e) {
-            return 'недавно';
-        }
-    }
-
-    // Начало чата
-    async function startChat(userId, username) {
-        console.log("💬 Начало чата с:", username, "ID:", userId);
-
-        try {
-            // Создаем или получаем приватный чат
-            const response = await fetch('/api/chats/private', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                },
-                body: `otherUserId=${userId}`
-            });
-
-            const data = await response.json();
-
-            if (data.success && data.chatId) {
-                // Сохраняем информацию о текущем чате
-                currentChat = {
-                    id: data.chatId, // Используем ID чата, а не ID пользователя
-                    userId: userId,
-                    name: username,
-                    isPrivate: true
-                };
-
-                // Показываем область чата
-                document.querySelector('.no-chat-selected').classList.add('hidden');
-                document.getElementById('activeChat').classList.remove('hidden');
-
-                // Устанавливаем информацию о чате
-                document.getElementById('chatTitle').textContent = username;
-                document.getElementById('chatParticipants').textContent = `Участники: ${username}`;
-
-                // Активируем поле ввода
-                document.getElementById('messageInput').disabled = false;
-                document.getElementById('sendMessageBtn').disabled = false;
-
-                // Фокусируемся на поле ввода
-                document.getElementById('messageInput').focus();
-
-                // Загружаем историю сообщений
-                await loadChatMessages(data.chatId);
-
-                // Запускаем автообновление сообщений
-                startMessagePolling(data.chatId);
-            } else {
-                alert('❌ Ошибка создания чата: ' + data.message);
-            }
-        } catch (error) {
-            console.error('💥 Ошибка начала чата:', error);
-            alert('💥 Ошибка соединения с сервером');
-        }
-    }
-
-    // Загрузка сообщений чата
-    async function loadChatMessages(chatId) {
-        console.log("📨 Загрузка сообщений для чата ID:", chatId);
-
-        try {
-            const response = await fetch(`/api/chats/${chatId}/messages`);
-            if (!response.ok) {
-                throw new Error('Ошибка загрузки сообщений');
-            }
-
-            const messages = await response.json();
-            displayMessages(messages);
-        } catch (error) {
-            console.error('❌ Ошибка загрузки сообщений:', error);
-            document.getElementById('messagesContainer').innerHTML = `
-                <div class="no-messages">
-                    <p>❌ Ошибка загрузки сообщений</p>
-                </div>
-            `;
-        }
-    }
-
-    // Отображение сообщений
-    function displayMessages(messages) {
-        const container = document.getElementById('messagesContainer');
-
-        if (messages.length === 0) {
-            container.innerHTML = `
-                <div class="no-messages">
-                    <p>💬 Начните общение с этим пользователем!</p>
-                    <p><em>Отправьте первое сообщение</em></p>
-                </div>
-            `;
-            return;
-        }
-
-        container.innerHTML = messages.map(message => {
-            const isOwnMessage = message.senderId === currentUser.id;
-            const messageTime = new Date(message.createdAt).toLocaleTimeString('ru-RU', {
-                hour: '2-digit',
-                minute: '2-digit'
-            });
-
-            return `
-                <div class="message-item ${isOwnMessage ? 'own' : 'other'}">
-                    <div class="message-header">
-                        <span class="message-sender">${message.senderName}</span>
-                        <span class="message-time">${messageTime}</span>
-                    </div>
-                    <div class="message-content">${message.content}</div>
-                    ${!message.isDeleted ? `
-                        <div class="message-actions">
-                            ${isOwnMessage ? `
-                                <button class="message-action delete-message"
-                                        onclick="deleteMessage(${message.id})"
-                                        title="Удалить сообщение">🗑️</button>
-                            ` : `
-                                <button class="message-action report-message"
-                                        onclick="reportMessage(${message.id})"
-                                        title="Пожаловаться">⚠️</button>
-                            `}
-                        </div>
-                    ` : ''}
-                </div>
-            `;
-        }).join('');
-
-        // Прокручиваем вниз
-        container.scrollTop = container.scrollHeight;
-    }
-
-    // Запуск автообновления сообщений
-    function startMessagePolling(chatId) {
-        // Останавливаем предыдущий интервал
-        if (messagePollingInterval) {
-            clearInterval(messagePollingInterval);
-        }
-
-        // Запускаем новый интервал
-        messagePollingInterval = setInterval(async () => {
-            if (currentChat && currentChat.id === chatId) {
-                await loadChatMessages(chatId);
-            }
-        }, 2000); // Обновляем каждые 2 секунды
-    }
-
-    // Остановка автообновления
-    function stopMessagePolling() {
-        if (messagePollingInterval) {
-            clearInterval(messagePollingInterval);
-            messagePollingInterval = null;
-        }
-    }
-
-    // Отправка сообщения
-    async function sendMessage() {
-        if (!currentChat || !currentUser) {
-            alert('❌ Чат не выбран');
-            return;
-        }
-
-        const messageInput = document.getElementById('messageInput');
-        const content = messageInput.value.trim();
-
-        if (!content) {
-            return;
-        }
-
-        console.log("📤 Отправка сообщения в чат:", currentChat.id, "Текст:", content);
-
-        try {
-            const messageResponse = await fetch('/api/messages/send', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                },
-                body: `chatId=${currentChat.id}&content=${encodeURIComponent(content)}`
-            });
-
-            const messageData = await messageResponse.json();
-
-            if (messageData.success) {
-              //  console.log("✅ Сообщение отправлено!");
-                // Очищаем поле ввода
-                messageInput.value = '';
-                // Немедленно обновляем сообщения
-                await loadChatMessages(currentChat.id);
-            } else {
-                alert('❌ Ошибка отправки сообщения: ' + messageData.message);
-            }
-        } catch (error) {
-            console.error('💥 Ошибка отправки сообщения:', error);
-            alert('💥 Ошибка соединения с сервером');
-        }
-    }
-
-    // Удаление сообщения
-    async function deleteMessage(messageId) {
-        if (!confirm('Удалить это сообщение?')) return;
-
-        try {
-            const response = await fetch(`/api/messages/${messageId}`, {
-                method: 'DELETE'
-            });
-
-            const data = await response.json();
-            if (data.success && currentChat) {
-                await loadChatMessages(currentChat.id);
-            }
-        } catch (error) {
-            console.error('Ошибка удаления сообщения:', error);
-        }
-    }
-
-    // Жалоба на сообщение
-    async function reportMessage(messageId) {
-        const reason = prompt('Введите причину жалобы:');
-        if (!reason) return;
-
-        try {
-            const response = await fetch('/api/reports', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                },
-                body: `messageId=${messageId}&reason=${encodeURIComponent(reason)}`
-            });
-
-            const data = await response.json();
-            if (data.success) {
-                alert('Жалоба отправлена администратору');
-            } else {
-                alert('Ошибка отправки жалобы');
-            }
-        } catch (error) {
-            console.error('Ошибка отправки жалобы:', error);
-        }
-    }
-
-    // Обработчик нажатия Enter в поле ввода
-    document.getElementById('messageInput')?.addEventListener('keypress', function(e) {
-        if (e.key === 'Enter') {
-            sendMessage();
-        }
-    });
-
-    // Обработчик кнопки отправки
-    document.getElementById('sendMessageBtn')?.addEventListener('click', sendMessage);
-
-    // ==================== СИСТЕМНЫЕ ФУНКЦИИ ====================
-    // Выход из системы
-    async function logout() {
-        console.log("🚪 Выход из системы...");
-
-        if (!confirm('Вы уверены, что хотите выйти?')) {
-            return;
-        }
-
-        // Останавливаем автообновление сообщений
-        stopMessagePolling();
-
-        try {
-            const response = await fetch('/api/logout', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                }
-            });
-
-            console.log("✅ Выход выполнен, статус:", response.status);
-            window.location.href = '/';
-        } catch (error) {
-            console.error('❌ Ошибка выхода:', error);
-            window.location.href = '/';
-        }
-    }
-
-    // Закрытие модального окна при клике вне его
-    document.addEventListener('click', function(e) {
-        if (e.target.id === 'changePasswordModal') {
-            hideChangePasswordModal();
-        }
-    });
-
-    // Обработчик нажатия Enter в полях пароля
-    document.addEventListener('DOMContentLoaded', function() {
-        const passwordInputs = document.querySelectorAll('#changePasswordModal input[type="password"]');
-        passwordInputs.forEach(input => {
-            input.addEventListener('keypress', function(e) {
-                if (e.key === 'Enter') {
-                    changePassword();
-                }
-            });
-        });
-    });
-
-    // Автообновление данных каждые 10 секунд
-    setInterval(() => {
-        if (currentUser) {
-            loadFriendRequests();
-            loadContacts();
-            updateUserStatus();
-        }
-    }, 10000);
-
-    // Загрузка аватарки
-    document.getElementById('avatarUpload').addEventListener('change', function(e) {
-        const file = e.target.files[0];
-        if (file) {
-            uploadAvatar(file);
-        }
-    });
-
-    async function uploadAvatar(file) {
-        const formData = new FormData();
-        formData.append('avatar', file);
-
-        try {
-            const response = await fetch('/api/profile/upload-avatar', {
-                method: 'POST',
-                body: formData
-            });
-
-            const data = await response.json();
-            if (data.success) {
-                alert('Аватар обновлен!');
-                location.reload(); // Перезагружаем для обновления аватарки
-            } else {
-                alert('Ошибка: ' + data.message);
-            }
-        } catch (error) {
-            console.error('Ошибка загрузки аватарки:', error);
-            alert('Ошибка загрузки файла');
-        }
-    }
-
-
-
-    // Обновление статуса онлайн каждые 30 секунд
-    setInterval(() => {
-        fetch('/api/user/ping', { method: 'POST' });
-    }, 30000);
-
-    // При загрузке страницы отмечаем онлайн
-    window.addEventListener('load', () => {
-        fetch('/api/user/ping', { method: 'POST' });
-    });
-
-    // При закрытии страницы отмечаем оффлайн
-    window.addEventListener('beforeunload', () => {
-        navigator.sendBeacon('/api/user/logout');
-    });
-
-
-</script>
-
+<!-- Модальное окно создания группы -->
 <div id="createGroupModal" class="modal hidden">
     <div class="modal-content">
         <h3>👥 Создать новую группу</h3>
@@ -1198,7 +430,7 @@
         </div>
 
         <div class="selected-participants" id="selectedParticipants">
-            <h4>Выбранные участники (0):</h4>
+            <h4>Выбранные участники (<span id="selectedCount">0</span>):</h4>
             <div id="selectedParticipantsList"></div>
         </div>
 
@@ -1210,5 +442,197 @@
         <div id="createGroupMessage" class="message"></div>
     </div>
 </div>
+
+<script>
+    // ==================== ФУНКЦИИ СОЗДАНИЯ ГРУППЫ ====================
+    let selectedParticipants = new Map();
+
+    function showCreateGroupModal() {
+        console.log("🟢 Кнопка 'Создать группу' нажата!");
+
+        const modal = document.getElementById('createGroupModal');
+        if (!modal) {
+            console.error("❌ Модальное окно не найдено!");
+            alert("Ошибка: модальное окно создания группы не найдено");
+            return;
+        }
+
+        // Очищаем форму
+        document.getElementById('groupName').value = '';
+
+        // Загружаем контакты
+        loadContactsForGroup();
+
+        // Показываем модальное окно
+        modal.classList.remove('hidden');
+        console.log("✅ Модальное окно показано");
+    }
+
+    function hideCreateGroupModal() {
+        const modal = document.getElementById('createGroupModal');
+        if (modal) modal.classList.add('hidden');
+    }
+
+    function loadContactsForGroup() {
+        const contactsList = document.getElementById('groupParticipantsList');
+        const selectedList = document.getElementById('selectedParticipantsList');
+        const selectedCount = document.getElementById('selectedCount');
+
+        if (!contactsList) {
+            console.error("❌ Контейнер для контактов не найден!");
+            return;
+        }
+
+        // Очищаем старый список
+        selectedParticipants.clear();
+        if (selectedList) selectedList.innerHTML = '';
+        if (selectedCount) selectedCount.textContent = '0';
+
+        contactsList.innerHTML = '<div class="loading">Загрузка контактов...</div>';
+
+        fetch('/api/contacts')
+            .then(response => {
+                if (!response.ok) throw new Error('Ошибка сети');
+                return response.json();
+            })
+            .then(contacts => {
+                if (contacts.length === 0) {
+                    contactsList.innerHTML = '<div class="no-contacts">У вас нет контактов</div>';
+                    return;
+                }
+
+                contactsList.innerHTML = contacts.map(contact => `
+                    <div class="participant-checkbox-item" data-user-id="${contact.id}">
+                        <input type="checkbox" id="contact_${contact.id}"
+                               onchange="toggleParticipant(${contact.id}, '${contact.username.replace(/'/g, "\\'")}')">
+                        <div class="participant-info">
+                            <img src="${contact.profileImageUrl || '/images/default-avatar.png'}"
+                                 class="avatar avatar-small" alt="${contact.username}">
+                            <div style="margin-left: 10px;">
+                                <div>${contact.username}</div>
+                                <div class="contact-status">${contact.online ? '🟢 В сети' : '⚫ Не в сети'}</div>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+            })
+            .catch(error => {
+                console.error('❌ Ошибка загрузки контактов:', error);
+                contactsList.innerHTML = '<div class="no-contacts">❌ Ошибка загрузки контактов</div>';
+            });
+    }
+
+    function toggleParticipant(userId, username) {
+        const checkbox = document.getElementById(`contact_${userId}`);
+        const selectedList = document.getElementById('selectedParticipantsList');
+        const selectedCount = document.getElementById('selectedCount');
+
+        if (!checkbox || !selectedList || !selectedCount) return;
+
+        if (checkbox.checked) {
+            // Добавляем участника
+            selectedParticipants.set(userId, username);
+
+            const participantHTML = `
+                <div class="selected-participant-item" id="selected_${userId}">
+                    ${username}
+                    <span class="selected-participant-remove" onclick="removeParticipant(${userId})">×</span>
+                </div>
+            `;
+
+            selectedList.insertAdjacentHTML('beforeend', participantHTML);
+        } else {
+            // Удаляем участника
+            removeParticipant(userId);
+        }
+
+        // Обновляем счетчик
+        selectedCount.textContent = selectedParticipants.size;
+    }
+
+    function removeParticipant(userId) {
+        selectedParticipants.delete(userId);
+
+        const selectedItem = document.getElementById(`selected_${userId}`);
+        if (selectedItem) selectedItem.remove();
+
+        const checkbox = document.getElementById(`contact_${userId}`);
+        if (checkbox) checkbox.checked = false;
+
+        const selectedCount = document.getElementById('selectedCount');
+        if (selectedCount) selectedCount.textContent = selectedParticipants.size;
+    }
+
+    async function createGroup() {
+        const groupName = document.getElementById('groupName')?.value.trim();
+        const messageElement = document.getElementById('createGroupMessage');
+
+        if (!groupName) {
+            showGroupMessage('Введите название группы', 'error');
+            return;
+        }
+
+        if (selectedParticipants.size < 2) {
+            showGroupMessage('Выберите минимум 2 участника', 'error');
+            return;
+        }
+
+        const participantIds = Array.from(selectedParticipants.keys());
+
+        try {
+            const response = await fetch('/api/chats/group', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    name: groupName,
+                    participantIds: participantIds
+                })
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                showGroupMessage('✅ Группа успешно создана!', 'success');
+
+                // Закрываем модальное окно через 2 секунды
+                setTimeout(() => {
+                    hideCreateGroupModal();
+
+                    // Перезагружаем страницу чтобы обновить список чатов
+                    setTimeout(() => {
+                        location.reload();
+                    }, 1000);
+                }, 2000);
+
+            } else {
+                showGroupMessage('❌ ' + (data.message || 'Ошибка создания группы'), 'error');
+            }
+        } catch (error) {
+            console.error('💥 Ошибка создания группы:', error);
+            showGroupMessage('💥 Ошибка соединения с сервером', 'error');
+        }
+    }
+
+    function showGroupMessage(message, type) {
+        const element = document.getElementById('createGroupMessage');
+        if (element) {
+            element.textContent = message;
+            element.className = `message ${type}`;
+        }
+    }
+
+    // Делаем функции доступными глобально
+    window.showCreateGroupModal = showCreateGroupModal;
+    window.hideCreateGroupModal = hideCreateGroupModal;
+    window.toggleParticipant = toggleParticipant;
+    window.removeParticipant = removeParticipant;
+    window.createGroup = createGroup;
+</script>
+
+<!-- Подключение общего JS файла с остальными функциями -->
+<script src="/js/chat.js"></script>
+
 </body>
 </html>
