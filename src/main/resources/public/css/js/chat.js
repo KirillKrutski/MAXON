@@ -1084,16 +1084,32 @@ async function uploadAvatar(file) {
 // ==================== СОЗДАНИЕ ГРУПП ====================
 
 // Показать модальное окно создания группы
+
 function showCreateGroupModal() {
+    console.log("🟢 Кнопка 'Создать группу' нажата!");
+    console.log("🟡 Проверка доступности модального окна...");
+
     const modal = document.getElementById('createGroupModal');
+    console.log("🔍 Модальное окно найдено?", modal ? "Да" : "Нет");
+
     if (!modal) {
+        console.log("🛠 Создаем модальное окно...");
         createGroupModal();
+        // После создания нужно получить элемент снова
+        const newModal = document.getElementById('createGroupModal');
+        if (newModal) {
+            newModal.classList.remove('hidden');
+            console.log("✅ Модальное окно создано и показано");
+        }
         return;
     }
 
+    console.log("🔄 Загружаем контакты для группы...");
     document.getElementById('groupName').value = '';
     loadContactsForGroup();
+
     modal.classList.remove('hidden');
+    console.log("✅ Модальное окно показано");
 }
 
 // Создать модальное окно группы
@@ -1271,12 +1287,22 @@ async function createGroup() {
         if (data.success) {
             showGroupMessage('✅ Группа успешно создана!', 'success');
 
+            // ============ ПУНКТ 6 ============
             // Закрываем модальное окно через 2 секунды
             setTimeout(() => {
                 hideCreateGroupModal();
-                // Перезагружаем чаты (если у вас есть такой функционал)
-                // loadChats();
+
+                // Перезагружаем чаты
+                loadChats();
+
+                // Автоматически открываем созданную группу
+                if (data.chatId) {
+                    setTimeout(() => {
+                        openChat(data.chatId, groupName, true);
+                    }, 500);
+                }
             }, 2000);
+
         } else {
             showGroupMessage('❌ ' + (data.message || 'Ошибка создания группы'), 'error');
         }
@@ -1308,21 +1334,121 @@ async function loadChats() {
     }
 }
 
-// Отображение чатов (обновите вашу существующую функцию)
-function displayChats(chats) {
-    // Разделяем чаты на приватные и групповые
-    const privateChats = chats.filter(chat => !chat.group);
-    const groupChats = chats.filter(chat => chat.group);
+// Отображение чатов
+// Отображение сообщений (обновите существующую функцию)
+function displayMessages(messages) {
+    const container = document.getElementById('messagesContainer');
+    if (!container) return;
 
-    // Ваша логика отображения...
+    if (messages.length === 0) {
+        container.innerHTML = `
+            <div class="no-messages">
+                <p>💬 Начните общение в этом чате!</p>
+                <p><em>Отправьте первое сообщение</em></p>
+            </div>
+        `;
+        return;
+    }
+
+    container.innerHTML = messages.map(message => {
+        const isOwnMessage = currentUser && message.senderId === currentUser.id;
+        const messageTime = new Date(message.createdAt).toLocaleTimeString('ru-RU', {
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+
+        // Определяем, показывать ли аватар и имя отправителя
+        // В групповых чатах показываем всегда, в приватных - только если не наше сообщение
+        const showSenderInfo = currentChat?.isGroup || !isOwnMessage;
+
+        // Аватар отправителя (если есть в данных)
+        let avatarHTML = '';
+        if (showSenderInfo && message.sender) {
+            avatarHTML = `
+                <div class="message-avatar">
+                    <img src="${message.sender.profileImageUrl || '/images/default-avatar.png'}" 
+                         class="avatar avatar-small" 
+                         alt="${message.senderName}">
+                </div>
+            `;
+        }
+
+        return `
+            <div class="message-item ${isOwnMessage ? 'own' : 'other'}">
+                <div class="message-header">
+                    ${showSenderInfo ? `<span class="message-sender">${message.senderName}</span>` : ''}
+                    <span class="message-time">${messageTime}</span>
+                </div>
+                <div class="message-content-wrapper">
+                    ${avatarHTML}
+                    <div class="message-content">
+                        ${message.content || ''}
+                        ${message.hasFile ? renderFileContent(message) : ''}
+                    </div>
+                </div>
+                ${!message.isDeleted ? renderMessageActions(message, isOwnMessage) : ''}
+            </div>
+        `;
+    }).join('');
+
+    // Прокручиваем вниз
+    container.scrollTop = container.scrollHeight;
 }
 
-// Делаем функции глобально доступными
-window.showCreateGroupModal = showCreateGroupModal;
-window.hideCreateGroupModal = hideCreateGroupModal;
-window.toggleParticipant = toggleParticipant;
-window.removeParticipant = removeParticipant;
-window.createGroup = createGroup;
+// Рендер файлов в сообщениях
+function renderFileContent(message) {
+    const fileIcon = getFileIcon(message.fileType);
+    const fileSize = message.fileSize ? formatFileSize(message.fileSize) : '';
+
+    if (message.fileType === 'image') {
+        return `
+            <div class="message-file image-file">
+                <img src="${message.fileUrl}" 
+                     alt="${message.fileName}"
+                     onclick="openImageModal('${message.fileUrl}', '${message.fileName}')"
+                     loading="lazy">
+                <div class="file-name">${message.fileName}</div>
+            </div>
+        `;
+    } else {
+        return `
+            <div class="message-file">
+                <div class="file-icon">${fileIcon}</div>
+                <div class="file-info">
+                    <div class="file-name">
+                        <a href="${message.fileUrl}" download="${message.fileName}">
+                            ${message.fileName}
+                        </a>
+                    </div>
+                    ${fileSize ? `<div class="file-size">${fileSize}</div>` : ''}
+                </div>
+            </div>
+        `;
+    }
+}
+
+// Рендер кнопок действий для сообщения
+function renderMessageActions(message, isOwnMessage) {
+    return `
+        <div class="message-actions">
+            ${isOwnMessage ? `
+                <button class="message-action delete-message"
+                        onclick="deleteMessage(${message.id})"
+                        title="Удалить сообщение">
+                    🗑️
+                </button>
+            ` : `
+                <button class="message-action report-message"
+                        onclick="reportMessage(${message.id})"
+                        title="Пожаловаться">
+                    ⚠️
+                </button>
+            `}
+        </div>
+    `;
+}
+
+
 
 // ==================== ГЛОБАЛЬНЫЕ ФУНКЦИИ ====================
 // Делаем функции доступными глобально
@@ -1342,3 +1468,8 @@ window.removeSelectedFile = removeSelectedFile;
 window.openImageModal = openImageModal;
 window.formatFileSize = formatFileSize;
 window.formatLastSeen = formatLastSeen;
+window.showCreateGroupModal = showCreateGroupModal;
+window.hideCreateGroupModal = hideCreateGroupModal;
+window.toggleParticipant = toggleParticipant;
+window.removeParticipant = removeParticipant;
+window.createGroup = createGroup;

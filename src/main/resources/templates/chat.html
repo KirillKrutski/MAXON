@@ -239,6 +239,55 @@
             font-size: 0.8rem;
             color: #666;
         }
+
+        /* Добавьте в стили chat.html */
+        .message-item {
+            margin: 10px 0;
+            padding: 8px 12px;
+            border-radius: 10px;
+            max-width: 70%;
+        }
+
+        .message-item.own {
+            background-color: #e3f2fd;
+            margin-left: auto;
+            margin-right: 10px;
+        }
+
+        .message-item.other {
+            background-color: #f5f5f5;
+            margin-left: 10px;
+        }
+
+        .message-content-wrapper {
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+        }
+
+        .message-avatar {
+            flex-shrink: 0;
+        }
+
+        .message-sender {
+            font-weight: bold;
+            font-size: 0.9rem;
+            color: #667eea;
+            margin-right: 8px;
+        }
+
+        .message-time {
+            font-size: 0.75rem;
+            color: #888;
+        }
+
+        .message-file {
+            margin-top: 8px;
+            padding: 8px;
+            background: white;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+        }
     </style>
 </head>
 <body>
@@ -264,7 +313,7 @@
                     <button onclick="showChangePasswordModal()" class="btn-secondary" title="Сменить пароль">🔑</button>
                     <button onclick="logout()" class="btn-secondary">🚪 Выйти</button>
                 </div>
-                <button onclick="showCreateGroupModal()" class="btn-primary" title="Создать группу">👥 Создать группу</button>
+
             </div>
         </div>
 
@@ -283,7 +332,12 @@
 
         <!-- Список контактов -->
         <div class="contacts-section">
-            <h3>👥 Мои контакты</h3>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                <h3 style="margin: 0;">👥 Мои контакты</h3>
+                <button onclick="showCreateGroupModal()" class="btn-small" title="Создать группу">
+                    👥 Создать группу
+                </button>
+            </div>
             <div id="contactsList" class="contacts-list">
                 <div class="no-contacts">Контактов пока нет</div>
             </div>
