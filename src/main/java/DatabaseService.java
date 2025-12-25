@@ -253,9 +253,13 @@ public class DatabaseService {
                 for (int participantId : participantIds) {
                     addParticipantToChat(chatId, participantId);
                 }
+
+                System.out.println("👥 Создана группа: " + name + " (ID: " + chatId +
+                        "), участников: " + (participantIds.size() + 1));
                 return chatId;
             }
         } catch (SQLException e) {
+            System.out.println("❌ Ошибка создания группового чата: " + e.getMessage());
             e.printStackTrace();
         }
         return -1;
@@ -1103,5 +1107,7 @@ public class DatabaseService {
         // 2. Отправить WebSocket сообщение о блокировке
         // 3. Записать в лог для последующей очистки
     }
+
+
 
 }

@@ -1,4 +1,3 @@
-
 let currentUser = null;
 let currentChat = null;
 let selectedFile = null;

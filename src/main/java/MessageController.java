@@ -441,6 +441,42 @@ public class MessageController {
                 ctx.json(Map.of("success", false, "message", "Ошибка сервера: " + e.getMessage()));
             }
         });
+
+        // В MessageController.setupRoutes() добавьте:
+        app.post("/api/chats/group", ctx -> {
+            User currentUser = ctx.sessionAttribute("user");
+            if (currentUser == null) {
+                ctx.status(401).json(Map.of("success", false, "message", "Not authenticated"));
+                return;
+            }
+
+            try {
+                Map<String, Object> requestBody = ctx.bodyAsClass(Map.class);
+                String groupName = (String) requestBody.get("name");
+                List<Integer> participantIds = (List<Integer>) requestBody.get("participantIds");
+
+                if (groupName == null || groupName.trim().isEmpty()) {
+                    ctx.json(Map.of("success", false, "message", "Введите название группы"));
+                    return;
+                }
+
+                if (participantIds == null || participantIds.size() < 2) {
+                    ctx.json(Map.of("success", false, "message", "Выберите минимум 2 участника"));
+                    return;
+                }
+
+                int chatId = DatabaseService.createGroupChat(groupName, currentUser.getId(), participantIds);
+
+                if (chatId != -1) {
+                    ctx.json(Map.of("success", true, "chatId", chatId, "message", "Группа создана"));
+                } else {
+                    ctx.json(Map.of("success", false, "message", "Ошибка создания группы"));
+                }
+            } catch (Exception e) {
+                System.err.println("❌ Ошибка создания группы: " + e.getMessage());
+                ctx.json(Map.of("success", false, "message", "Ошибка сервера"));
+            }
+        });
     }
 
     // Вспомогательные методы
