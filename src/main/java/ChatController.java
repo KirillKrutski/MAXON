@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.List;
+import java.util.stream.Collectors;
 
 public class ChatController {
     private static final ObjectMapper objectMapper = new ObjectMapper();
@@ -103,6 +104,23 @@ public class ChatController {
             List<User> contacts = DatabaseService.getUserContacts(currentUser.getId());
             System.out.println("📞 Отправка контактов пользователю " + currentUser.getUsername() + ": " + contacts.size() + " контактов");
             ctx.json(contacts);
+        });
+
+        // Получение групповых чатов пользователя
+        app.get("/api/chats/groups", ctx -> {
+            User currentUser = ctx.sessionAttribute("user");
+            if (currentUser == null) {
+                ctx.status(401).json(Map.of("error", "Not authenticated"));
+                return;
+            }
+
+            List<Chat> allChats = DatabaseService.getUserChats(currentUser.getId());
+            List<Chat> groupChats = allChats.stream()
+                    .filter(Chat::isGroup)
+                    .collect(Collectors.toList());
+
+            System.out.println("👥 Отправка групповых чатов для " + currentUser.getUsername() + ": " + groupChats.size() + " чатов");
+            ctx.json(groupChats);
         });
     }
 }

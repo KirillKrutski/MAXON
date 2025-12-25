@@ -847,3 +847,66 @@ body {
 ::-webkit-scrollbar-thumb:hover {
     background: #a8a8a8;
 }
+
+/* Стили для табов контактов */
+.contacts-tabs {
+    display: flex;
+    margin-bottom: 1rem;
+    border-bottom: 1px solid #dee2e6;
+}
+
+.contacts-tab {
+    display: none;
+    flex-direction: column;
+    height: 100%;
+}
+
+.contacts-tab.active {
+    display: flex;
+}
+
+/* Стили для групповых чатов */
+.group-chat-item {
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border-left: 4px solid #667eea;
+}
+
+.group-avatar {
+    background: #667eea;
+    color: white;
+    font-size: 1.2rem;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 0.75rem;
+}
+
+.group-name {
+    color: #333;
+    font-weight: bold;
+    margin-bottom: 0.25rem;
+}
+
+.group-members {
+    font-size: 0.8rem;
+    color: #666;
+    margin-bottom: 0.25rem;
+}
+
+.last-message-preview {
+    font-size: 0.8rem;
+    color: #888;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 200px;
+}
+
+.last-message-time {
+    font-size: 0.7rem;
+    color: #aaa;
+    text-align: right;
+}

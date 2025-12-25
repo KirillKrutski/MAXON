@@ -332,13 +332,37 @@
         <!-- Список контактов -->
         <div class="contacts-section">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                <h3 style="margin: 0;">👥 Мои контакты</h3>
+                <!-- Табы для переключения -->
+                <div class="contacts-tabs" style="flex: 1; display: flex; gap: 10px; margin-right: 10px;">
+                    <button class="tab-button active"
+                            onclick="showContactsTab('contacts')"
+                            style="flex: 1; padding: 8px; border: none; border-radius: 5px; cursor: pointer; background: #f0f0f0;">
+                        👤 Контакты
+                    </button>
+                    <button class="tab-button"
+                            onclick="showContactsTab('groups')"
+                            style="flex: 1; padding: 8px; border: none; border-radius: 5px; cursor: pointer; background: #f0f0f0;">
+                        👥 Группы
+                    </button>
+                </div>
+
                 <button onclick="showCreateGroupModal()" class="btn-small" title="Создать группу">
-                    👥 Создать группу
+                    ➕ Создать
                 </button>
             </div>
-            <div id="contactsList" class="contacts-list">
-                <div class="no-contacts">Контактов пока нет</div>
+
+            <!-- Вкладка контактов -->
+            <div id="contactsTab" class="contacts-tab active">
+                <div id="contactsList" class="contacts-list">
+                    <div class="no-contacts">👤 Контактов пока нет</div>
+                </div>
+            </div>
+
+            <!-- Вкладка групповых чатов -->
+            <div id="groupsTab" class="contacts-tab" style="display: none;">
+                <div id="groupChatsList" class="contacts-list">
+                    <div class="no-contacts">👥 Групповых чатов нет</div>
+                </div>
             </div>
         </div>
     </div>
@@ -632,7 +656,7 @@
 </script>
 
 <!-- Подключение общего JS файла с остальными функциями -->
-<script src="/js/chat.js"></script>
+<script src="/css/js/chat.js"></script>
 
 </body>
 </html>

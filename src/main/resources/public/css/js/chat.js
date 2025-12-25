@@ -14,7 +14,9 @@ document.addEventListener('DOMContentLoaded', function() {
 async function initialize() {
     await loadUser();
     setupEventListeners();
+    loadGroupChats();
     startPolling();
+
 }
 
 // Загрузка информации о текущем пользователе
@@ -723,6 +725,135 @@ function stopMessagePolling() {
     }
 }
 
+async function loadGroupChats() {
+    try {
+        const response = await fetch('/api/chats/groups');
+        if (!response.ok) {
+            throw new Error('Ошибка загрузки групповых чатов');
+        }
+
+        const groups = await response.json();
+        console.log("👥 Загружено групповых чатов:", groups.length);
+        displayGroupChats(groups);
+    } catch (error) {
+        console.error('❌ Ошибка загрузки групповых чатов:', error);
+    }
+}
+
+// Отображение групповых чатов
+function displayGroupChats(groups) {
+    const container = document.getElementById('groupChatsList');
+    if (!container) return;
+
+    if (groups.length === 0) {
+        container.innerHTML = '<div class="no-contacts">👥 Групповых чатов нет</div>';
+        return;
+    }
+
+    container.innerHTML = groups.map(group => {
+        const lastMessage = group.lastMessage
+            ? (group.lastMessage.content || '📎 Файл')
+            : '💬 Нет сообщений';
+
+        return `
+            <div class="contact-item group-chat-item" data-chat-id="${group.id}">
+                <div class="contact-avatar group-avatar">👥</div>
+                <div class="contact-info">
+                    <div class="contact-name group-name">${group.name}</div>
+                    <div class="group-members">👤 ${group.participantsCount || group.participants?.length || 0} участников</div>
+                    ${group.lastMessage ? `
+                        <div class="last-message-preview">${lastMessage}</div>
+                        <div class="last-message-time">
+                            ${new Date(group.lastMessage.createdAt).toLocaleTimeString('ru-RU', {
+            hour: '2-digit',
+            minute: '2-digit'
+        })}
+                        </div>
+                    ` : ''}
+                </div>
+                <button class="btn-small start-chat-btn"
+                        onclick="startGroupChat(${group.id}, '${group.name.replace(/'/g, "\\'")}')"
+                        title="Открыть чат">
+                    💬 Чат
+                </button>
+            </div>
+        `;
+    }).join('');
+}
+
+// Начало группового чата
+async function startGroupChat(chatId, groupName) {
+    console.log("👥 Открытие группового чата:", groupName, "ID:", chatId);
+
+    currentChat = {
+        id: chatId,
+        name: groupName,
+        isGroup: true
+    };
+
+    // Показываем область чата
+    document.querySelector('.no-chat-selected')?.classList.add('hidden');
+    const activeChat = document.getElementById('activeChat');
+    if (activeChat) activeChat.classList.remove('hidden');
+
+    // Устанавливаем информацию о чате
+    const chatTitle = document.getElementById('chatTitle');
+    const chatParticipants = document.getElementById('chatParticipants');
+    if (chatTitle) chatTitle.textContent = groupName;
+    if (chatParticipants) chatParticipants.textContent = '👥 Групповой чат';
+
+    // Активируем поле ввода
+    const messageInput = document.getElementById('messageInput');
+    const sendMessageBtn = document.getElementById('sendMessageBtn');
+    if (messageInput) messageInput.disabled = false;
+    if (sendMessageBtn) sendMessageBtn.disabled = false;
+
+    // Фокусируемся на поле ввода
+    if (messageInput) messageInput.focus();
+
+    // Загружаем историю сообщений
+    await loadChatMessages(chatId);
+
+    // Запускаем автообновление сообщений
+    startMessagePolling(chatId);
+}
+
+// ==================== ПЕРЕКЛЮЧЕНИЕ ВКЛАДОК КОНТАКТОВ ====================
+function showContactsTab(tabName) {
+    console.log("🔄 Переключение на вкладку:", tabName);
+
+    // Обновляем активные кнопки
+    const buttons = document.querySelectorAll('.contacts-tabs .tab-button');
+    buttons.forEach(btn => {
+        if (btn.textContent.includes(tabName === 'contacts' ? 'Контакты' : 'Группы')) {
+            btn.classList.add('active');
+        } else {
+            btn.classList.remove('active');
+        }
+    });
+
+    // Показываем нужную вкладку
+    const contactsTab = document.getElementById('contactsTab');
+    const groupsTab = document.getElementById('groupsTab');
+
+    if (contactsTab && groupsTab) {
+        contactsTab.classList.toggle('active', tabName === 'contacts');
+        groupsTab.classList.toggle('active', tabName === 'groups');
+
+        // Скрываем/показываем элементы
+        contactsTab.style.display = tabName === 'contacts' ? 'block' : 'none';
+        groupsTab.style.display = tabName === 'groups' ? 'block' : 'none';
+    }
+
+    // Загружаем данные если нужно
+    if (tabName === 'groups') {
+        loadGroupChats();
+    } else {
+        loadContacts();
+    }
+}
+
+
 // ==================== ОТПРАВКА СООБЩЕНИЙ ====================
 // Отправка сообщения (текст и/или файл)
 async function sendMessage() {
@@ -873,6 +1004,8 @@ function hideChangePasswordModal() {
     if (modal) modal.classList.add('hidden');
 }
 
+
+
 // Смена пароля
 async function changePassword() {
     const currentPassword = document.getElementById('currentPassword')?.value;
@@ -968,6 +1101,15 @@ function startPolling() {
             fetch('/api/user/ping', { method: 'POST' });
         }
     }, 30000);
+
+    setInterval(() => {
+        if (currentUser) {
+            const activeTab = document.querySelector('.contacts-tabs .tab-button.active');
+            if (activeTab && activeTab.textContent.includes('Группы')) {
+                loadGroupChats();
+            }
+        }
+    }, 20000);
 }
 
 function stopPolling() {
@@ -1098,3 +1240,4 @@ window.removeSelectedFile = removeSelectedFile;
 window.openImageModal = openImageModal;
 window.formatFileSize = formatFileSize;
 window.formatLastSeen = formatLastSeen;
+window.showContactsTab = showContactsTab;
