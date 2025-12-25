@@ -1102,10 +1102,7 @@ public class DatabaseService {
     // Инвалидация сессий пользователя (симуляция)
     private static void invalidateUserSessions(int userId) {
         System.out.println("🚫 Инвалидация сессий для пользователя ID: " + userId);
-        // В реальном приложении здесь можно:
-        // 1. Удалить сессию из хранилища
-        // 2. Отправить WebSocket сообщение о блокировке
-        // 3. Записать в лог для последующей очистки
+
     }
 
 
